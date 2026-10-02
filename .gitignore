@@ -2,6 +2,10 @@ __pycache__/
 *.pyc
 *.pyo
 
+# fake ping/smbclient the harnesses write next to themselves
+testbin/
+testbin-win/
+
 # live show state - never commit
 push_log.txt
 push_log.txt.*
