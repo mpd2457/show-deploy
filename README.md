@@ -69,8 +69,9 @@ setup script prompts for it, and Ingest writes it to `~/.config/showkit/smbcreds
 at mode 600 (on Windows, to `%LOCALAPPDATA%\showkit` with an ACL for your user
 only). Macs use each Mac's own login, stored the same way in `smbcreds-mitti`.
 
-The restore scripts delete these files. If you use a throwaway password for a
-show, change it afterwards.
+Since the warehouse reimages between events, nothing on the rig keeps a
+password longer than one show. Set the same throwaway password on all three
+GFX machines each time you set up, and type it into Ingest once.
 
 ## What you will see in the log
 
@@ -87,7 +88,16 @@ FAIL = password or share, and it will be retried. DONE means you can stop watchi
 See [How it stays out of trouble](#how-it-stays-out-of-trouble) for why these
 outcomes can be trusted.
 
-## Install once per machine
+## Install every show
+
+**The warehouse reimages the rig between events, so every machine arrives at a
+show pristine.** Nothing carries over: no static IP, no share, no local
+account, no watcher, no stored credentials. All six machines need their setup
+script run at load-in, every time. This is the normal workflow, not a
+recovery path.
+
+Run them far-end first and Ingest **last**, because Ingest is the machine that
+holds the passwords and it needs the accounts to already exist.
 
 Cable to the switch first.
 
@@ -196,29 +206,63 @@ is asleep or the password is wrong — and does consume attempts.
 **One slow machine cannot block the others.** Pushes run in parallel, so a 20 GB
 media file does not hold up the decks.
 
+**No state is expected to survive a show.** The warehouse reimages between
+events, so there is no "repair the previous show's config" path and no hidden
+carry-over to reason about. Each show is six clean machines and a fresh queue.
+
 **Wi-Fi is never touched.** Every script refuses a wireless adapter outright
 rather than trusting the operator picked the right cable, and the restore path
 only ever re-addresses the wired port.
 
-## After the event: Ingest back to daily driver
+## After the event
 
-Linux:
-  cd ~/Desktop/show-deploy && sudo bash ./restore-ingest.sh
+The warehouse reimages the rig between events, so this kit has no teardown of
+its own to run. That process is outside this repo and nothing here drives it.
 
-Windows fallback:
-  Right-click RUN-ingest-win-restore.bat, Run as administrator.
-  Add -Purge to also delete the Ingest and Archive folders.
+**Do pull the logs off before the machines go back.** The reimage takes them
+with it, and `push_log.txt` is the only record of what actually reached which
+machine on which attempt.
 
-Both: stop and remove the watcher service/task, delete the stored SMB
-passwords and the push queue, put the wired port back to how it was
-(it goes to DHCP), clean the hosts file. Wi-Fi is never touched. No reboot.
-Ingest and Archive folders are KEPT so you still have the show files.
-To delete those too on Linux: sudo bash ./restore-ingest.sh --purge
-Run setup-ingest.sh again before the next show.
+From the Ingest machine, Linux:
 
-GFX and Mitti machines keep their show setup: static IP, share and local
-account. To undo those, run the setup script again to refresh, or set the
-adapter back to DHCP by hand. They are only ever plugged into the rig switch.
+```
+~/Desktop/Ingest/push_log.txt
+```
+
+Copy it somewhere that is not the rig, along with the far-end arrival logs if
+you want proof of receipt:
+
+```
+arrival_log.txt        C:\ShowScripts\        on GFX1-3
+showkit-arrival.log    ~/Library/Logs/        on MITTIA/B
+```
+
+### When to use the restore scripts instead
+
+Only when a machine has to be usable before it goes back for imaging, or when
+it is not going to be imaged at all. Two cases in practice:
+
+**The Windows work laptop.** If it acted as Ingest, run
+`RUN-ingest-win-restore.bat` as administrator and get your own laptop back. You
+want it returned to daily-driver state, not carrying a show image. It removes
+the scheduled task, deletes the stored SMB passwords and push queue, restores
+the wired adapter to the addressing it had before setup, and cleans the hosts
+file. Add `-Purge` to also delete the Ingest and Archive folders.
+
+**The Linux Ingest machine**, if you need it back early:
+
+```
+cd ~/Desktop/show-deploy && sudo bash ./restore-ingest.sh
+sudo bash ./restore-ingest.sh --purge     # also deletes Ingest and Archive
+```
+
+Same job: removes the watcher service and its script, deletes stored SMB
+credentials and the push queue, returns the wired port to DHCP, cleans the
+hosts file. Wi-Fi is never touched, and no reboot is needed.
+
+Both keep the Ingest and Archive folders by default, so the show files survive
+— only `--purge` / `-Purge` removes those, and that is the point at which the
+show files are gone.
 
 ## Notes
 
@@ -227,6 +271,12 @@ internet dependency at show time. The addresses, machine names and share name
 are defined once per file — `show-watcher.py` has them near the top,
 `setup-gfx.ps1` and `setup-mitti.sh` have an IP map. Retargeting the kit to a
 different subnet means editing those.
+
+The kit assumes the machines arrive from the warehouse already imaged to a
+clean baseline, which is what makes "run all six setup scripts at load-in"
+sufficient. Nothing here provisions the base image, so if the image ever
+starts carrying stale show config, that is a change to make in the image
+rather than here.
 
 The scripts assume `exFAT` or `NTFS` on the stick and a wired switch. Neither
 watcher daemonises itself: Linux uses a systemd user service with linger
