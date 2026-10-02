@@ -122,11 +122,80 @@ The same on all three GFX machines, and the same as the Mac logins. If whoever s
 | Can't find the Ingest folder | Whoever set up the kit |
 | Laptop won't connect / no lights | Whoever set up the kit |
 | A file is missing but the log says `DONE` | Whoever set up the kit — the log will tell them which machine it's on |
+| Mac says "unidentified developer" | Not a fault — right-click the file and choose **Open** |
+| A machine asks to restart | Only a GFX machine does this, and only after renaming itself. Let it restart. |
+| Setup file won't open at all | Double-click on Windows, right-click → Open on Mac. Pick the one for that machine. |
 
 In a genuine emergency, the log is the fastest way to a straight answer. Screenshot `push_log.txt` and send it.
 
 ---
 
+## Starting the setup scripts
+
+**You only need this if you're setting the kit up.** If someone set the rig up
+before you got there, skip to the next section — everything else on this page is
+about putting files on machines, which is the same all show long.
+
+There are six machines and each one is started a slightly different way, because
+Windows, Mac and Linux each put up their own kind of roadblock.
+
+| Which machine | What to click | Then |
+|---|---|---|
+| **GFX1** (first of the three big laptops) | Double-click `RUN-gfx1.bat` | Click **Yes** when it asks |
+| **GFX2** (second) | Double-click `RUN-gfx2.bat` | Click **Yes** when it asks |
+| **GFX3** (third) | Double-click `RUN-gfx3.bat` | Click **Yes** when it asks |
+| **MITTIA** (first Mac) | Right-click `RUN-mittiA.command` → **Open** | Confirm it |
+| **MITTIB** (second Mac) | Right-click `RUN-mittiB.command` → **Open** | Confirm it |
+| **INGEST** (the Ingest laptop) | See below | Type your login password |
+
+### The three things that trip people up
+
+**On Windows, just double-click.** Don't right-click for "Run as administrator" —
+these files already ask for permission themselves, so a box will pop up on its
+own. Click **Yes** on it. You'll see this every time and it's normal.
+
+**On Mac, right-click first.** If you double-click a Mac setup file, macOS
+refuses it and says it's "from an unidentified developer". That isn't a fault,
+it's just how Mac does first-time approval. **Right-click the file, choose
+Open**, and confirm. After that, double-clicking works like normal.
+
+**On Linux, use a terminal.** Open the terminal app, type these two lines, and
+press Enter after each:
+
+```
+cd ~/Desktop/show-deploy
+sudo bash ./setup-ingest.sh
+```
+
+It asks for your Mac login password — not the show password, your own one.
+
+### When it asks for the show password
+
+Just **press Enter**. The password is `showrig` and it works on all six machines,
+so there's nothing to remember and nothing to type. If you'd rather set your own,
+type it instead — but then you have to type that same one on every machine, or
+the file transfers will fail.
+
+### Order
+
+Do the five far-end machines first, and **Ingest last**. Ingest is the one that
+holds the passwords, and it needs the other machines to already exist before it
+can store them.
+
+### If it asks you to restart a machine
+
+**Restart it.** The GFX and Mitti machines both rename themselves during setup,
+and that change doesn't fully take effect until they restart. It's a few minutes
+each, so do them one at a time while the others carry on being set up.
+
+The **Ingest** laptop never needs restarting — if one of those asks you to
+restart, stop and ask someone.
+
+---
+
 ## The long version
 
-If you need to set the kit up from scratch, or something about the machines themselves needs changing, that's a separate page: the [main README](README.md). It's written for someone technical and you don't need any of it for a normal show.
+If something about the machines themselves needs changing, or you want the detail
+behind any of this, that's a separate page: the [main README](README.md). It
+covers the same ground in more depth, plus the parts that only matter when
+something has gone wrong.

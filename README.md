@@ -121,20 +121,69 @@ holds the passwords and it needs the accounts to already exist.
 
 Cable to the switch first.
 
-Ingest on mkultra2 (Linux), from the show-deploy folder:
+### How to start each script
+
+There is no single answer that covers all six machines, because each platform has
+its own gate:
+
+| Machine | File | How to start it | Then |
+|---|---|---|---|
+| GFX1 `.11` | `RUN-gfx1.bat` | **Double-click** | Click **Yes** on the UAC prompt |
+| GFX2 `.12` | `RUN-gfx2.bat` | **Double-click** | Click **Yes** on the UAC prompt |
+| GFX3 `.13` | `RUN-gfx3.bat` | **Double-click** | Click **Yes** on the UAC prompt |
+| MITTIA `.15` | `RUN-mittiA.command` | **Right-click → Open** | Confirm; macOS blocks it otherwise |
+| MITTIB `.16` | `RUN-mittiB.command` | **Right-click → Open** | Confirm; macOS blocks it otherwise |
+| INGEST `.10` | `RUN-ingest.sh` | Terminal, or `chmod +x` then double-click | Type your sudo password |
+
+Two details worth knowing before load-in:
+
+**Windows — double-click is enough.** Do *not* right-click for "Run as
+administrator". Each `.bat` calls `-Verb RunAs` itself, so the UAC prompt appears
+on its own. Right-clicking first gives you the same result, just via a longer
+path. There is one `.bat` per machine, so the filename tells you which one it is
+and you cannot run the wrong script.
+
+**Mac — right-click → Open, not double-click.** Gatekeeper refuses a `.command`
+file on first run with "cannot be opened because it is from an unidentified
+developer". Right-clicking and choosing **Open** clears it, after which a
+double-click works normally. Each wrapper passes its own machine name, so
+`RUN-mittiA.command` is MITTIA and `RUN-mittiB.command` is MITTIB.
+
+**Linux — needs sudo, so use a terminal.** `RUN-ingest.sh` is a thin wrapper
+around the same command, so if your file manager will not run it:
+
+```
+cd ~/Desktop/show-deploy
+sudo bash ./setup-ingest.sh
+```
+
+### What each script asks
+
+All of them prompt for the share password. **Press Enter to accept `showrig`**
+rather than inventing one per machine — see [The share password](#the-share-password).
+
+INGEST on mkultra2 (Linux), from the show-deploy folder:
   sudo bash ./setup-ingest.sh
-It asks for the GFX password, then offers the Mac login (blank to skip).
-Pass the wired interface name as the first argument if auto-detection is wrong.
-No reboot.
+It asks for the GFX password, then the Mac login (blank to skip if no Macs on
+this show). Pass the wired interface name as the first argument if auto-detection
+is wrong: `sudo bash ./setup-ingest.sh enp3s0`. No reboot.
 Check: systemctl --user status showwatcher
 
-GFX: double-click RUN-gfx1.bat on the .11 laptop, RUN-gfx2.bat on .12, RUN-gfx3.bat on .13.
-UAC Yes. It asks for the share password. Reboot if it renamed the PC.
+GFX: double-click RUN-gfx1.bat on the .11 laptop, RUN-gfx2.bat on .12,
+RUN-gfx3.bat on .13. UAC Yes. Asks for the share password. **Reboot only if it
+says it renamed the PC** — which it does on a freshly imaged machine, since the
+image will not carry the right name.
 
 Mac: right-click RUN-mittiA.command or RUN-mittiB.command, Open.
 Then System Settings, Sharing, File Sharing ON.
 ShowShare must be Desktop/Ingest. Tick SMB and tick the user.
-Reboot. On the first push, click Allow on the Local Network prompt.
+**Reboot** — the Mac setup renames the machine the same way, and File Sharing
+does not reliably come up under the new name until it has. On the first push,
+click Allow on the Local Network prompt.
+
+GFX and Mitti machines both rename themselves, so expect five reboots across the
+rig. Ingest never needs one. Restart them one at a time; the others are
+independent.
 
 ## Windows Ingest fallback
 
@@ -142,10 +191,10 @@ Use this when mkultra2 is not available. Same IP, same drop folder, same log,
 same retry behaviour — `show-watcher.ps1` is a port of `show-watcher.py`, not a
 simplification, so a show behaves identically whichever laptop is in the van.
 
-Right-click `RUN-ingest-win.bat`, Run as administrator. It asks the same
-questions, creates `Desktop\Ingest`, `Desktop\Archive` and Day 1-5, stores
-credentials under `%LOCALAPPDATA%\showkit`, and registers a scheduled task that
-starts the watcher at logon.
+Double-click `RUN-ingest-win.bat` and click **Yes** on the UAC prompt. It asks
+the same questions, creates `Desktop\Ingest`, `Desktop\Archive` and Day 1-5,
+stores credentials under `%LOCALAPPDATA%\showkit`, and registers a scheduled
+task that starts the watcher at logon.
 
 Two deliberate differences:
 
@@ -158,11 +207,11 @@ Requires `smbclient.exe`, present on Windows 11 Pro out of the box, and
 `ThreadJob` from PowerShell 5.1+. Both are standard on Pro; Home editions are
 not a supported target.
 
-To undo it, run `RUN-ingest-win-restore.bat` as administrator. It removes the
-scheduled task, deletes the stored credentials and push queue, restores the
-wired adapter to the exact addressing it had beforehand (saved at setup, so
-not merely "assume DHCP"), and cleans the hosts file. Add `-Purge` to also
-delete the Ingest and Archive folders.
+To undo it, double-click `RUN-ingest-win-restore.bat` and click **Yes** on the
+UAC prompt. It removes the scheduled task, deletes the stored credentials and
+push queue, restores the wired adapter to the exact addressing it had beforehand
+(saved at setup, so not merely "assume DHCP"), and cleans the hosts file. Add
+`-Purge` to also delete the Ingest and Archive folders.
 
 ## Show day
 
