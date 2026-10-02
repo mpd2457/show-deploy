@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+*.pyo
+
+# live show state - never commit
+push_log.txt
+push_log.txt.*
+queue.json
+smbcreds
+smbcreds-mitti
+arrival_log.txt
+arrival_log.txt.*
+showkit-arrival.log
+showkit-arrival.log.*
+network-before.json
+
+# operator scratch
+*.swp
+*~
+.DS_Store
+Thumbs.db
