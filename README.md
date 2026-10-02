@@ -23,7 +23,7 @@ available — see [Windows Ingest](#windows-ingest-fallback).
 | `RUN-ingest.sh` / `RUN-restore.sh` | Linux Ingest | double-click wrappers around the two above |
 | `setup-ingest-win.ps1` | Windows Ingest | same job as `setup-ingest.sh` |
 | `restore-ingest-win.ps1` | Windows Ingest | undoes it, restores the adapter's prior addressing |
-| `RUN-ingest-win.bat` / `RUN-ingest-win-restore.bat` | Windows Ingest | Run as administrator wrappers |
+| `RUN-ingest-win.bat` / `RUN-ingest-win-restore.bat` | Windows Ingest | double-click wrappers that request elevation themselves |
 | `show-watcher.py` | Linux Ingest | the push watcher itself |
 | `show-watcher.ps1` | Windows Ingest | the same watcher, ported |
 | `setup-gfx.ps1` | GFX1-3 | Windows deck machines: IP, share, arrival log |
@@ -226,7 +226,20 @@ goes wrong, the log names the machine and the reason.
 Every show: power on, cable Ingest, drop files with a new filename each version.
 Sort into Day 1-Day 5 yourself.
 
-After 5 MB the log rotates, keeping `push_log.txt.1` and `.2`.
+### Logs and rotation
+
+Three logs, all plain text, none of them load-bearing:
+
+| Log | Where | Rotates at | Keeps |
+|---|---|---|---|
+| `push_log.txt` | Ingest, in the drop folder | 5 MB | `.1` `.2` `.3` |
+| `arrival_log.txt` | GFX1-3, `C:\ShowScripts\` | 5 MB | `.1` |
+| `showkit-arrival.log` | MITTIA/B, `~/Library/Logs/` | 5 MB | `.1` |
+
+`push_log.txt` is the one that matters during a show: it is what tells you a
+file landed. The other two record what each far end received, which is only
+useful afterwards if you want to confirm a file arrived by some route other
+than the push.
 
 ### What gets pushed where
 
@@ -276,10 +289,17 @@ is written to disk, so if Ingest reboots mid-show it resumes instead of starting
 over. Backoff timers reset on restart, because a restart usually means the rig
 just came up.
 
-**Absence is not failure.** A machine that does not answer a ping is `SKIP`ped
-and re-checked every 60s for 10 minutes, without spending retry attempts. A
-machine that answers ping but refuses the share is a genuine `FAIL` — the share
-is asleep or the password is wrong — and does consume attempts.
+**Absence is not failure, but it is not unlimited.** A machine that does not
+answer a ping is `SKIP`ped and re-checked every 60 seconds for 10 minutes,
+without spending retry attempts. A machine that answers ping but refuses the
+share is a genuine `FAIL` — the share is asleep or the password is wrong — and
+does consume attempts.
+
+One consequence worth knowing: if a machine stays absent for that whole 10
+minutes, the watcher stops waiting for it and reports `DONE` with a note, rather
+than blocking the file forever. It will **not** retry that file if the machine
+later appears. Switch the machine on within the window and it gets the file; past
+it, re-copy the file.
 
 **One slow machine cannot block the others.** Pushes run in parallel, so a 20 GB
 media file does not hold up the decks.
@@ -320,12 +340,13 @@ showkit-arrival.log    ~/Library/Logs/        on MITTIA/B
 Only when a machine has to be usable before it goes back for imaging, or when
 it is not going to be imaged at all. Two cases in practice:
 
-**The Windows work laptop.** If it acted as Ingest, run
-`RUN-ingest-win-restore.bat` as administrator and get your own laptop back. You
-want it returned to daily-driver state, not carrying a show image. It removes
-the scheduled task, deletes the stored SMB passwords and push queue, restores
-the wired adapter to the addressing it had before setup, and cleans the hosts
-file. Add `-Purge` to also delete the Ingest and Archive folders.
+**The Windows work laptop.** If it acted as Ingest, double-click
+`RUN-ingest-win-restore.bat` and click **Yes** on the UAC prompt to get your own
+laptop back. You want it returned to daily-driver state, not carrying a show
+image. It removes the scheduled task, deletes the stored SMB passwords and push
+queue, restores the wired adapter to the addressing it had before setup, and
+cleans the hosts file. Add `-Purge` to also delete the Ingest and Archive
+folders.
 
 **The Linux Ingest machine**, if you need it back early:
 
@@ -356,6 +377,8 @@ sufficient. Nothing here provisions the base image, so if the image ever
 starts carrying stale show config, that is a change to make in the image
 rather than here.
 
-The scripts assume `exFAT` or `NTFS` on the stick and a wired switch. Neither
-watcher daemonises itself: Linux uses a systemd user service with linger
-enabled, Windows uses a scheduled task at logon.
+The scripts assume `exFAT` or `NTFS` on the stick and a wired switch. The
+watchers run unattended once set up, which is what lets the Ingest laptop sit
+closed on the table: on Linux a systemd **user** service with linger enabled, so
+it survives logout and runs before anyone signs in; on Windows a scheduled task
+at logon. Neither starts on its own if the machine is off — obviously.

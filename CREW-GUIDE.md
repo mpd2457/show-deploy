@@ -1,8 +1,12 @@
 # Crew Guide — Show File Delivery
 
-For anyone running the show who isn't setting the kit up. No technical knowledge needed.
+For anyone running the show. No technical knowledge needed.
 
-If you just need to get a file onto a show machine, this page is all you need. The setup instructions in the [main README](README.md) are for whoever prepares the kit, not for you.
+If the rig was set up before you arrived, you only need the first four sections
+— getting files onto machines. The setup section is for whoever prepares the
+kit, and can be skipped.
+
+For the detail behind any of this, see the [main README](README.md).
 
 ---
 
@@ -65,7 +69,7 @@ The log ends with `GIVE UP` if a machine refused the file every time — usually
 
 **The easiest check: go and look at the machine.**
 
-If you dropped a deck, the GFX machines will have a copy in their Ingest folder. If you dropped media, the Mitti machines will have it. Just walk over and look. If it's on the machine, it's there — the kit checks each file after sending it and won't call it done unless the receiving machine confirmed it.
+If you dropped a deck, the GFX machines will have a copy in their Ingest folder. If you dropped media, the Mitti machines will have it. Just walk over and look. If it's on the machine, it's there — the kit checks each file after sending it and won't call it done if the size doesn't match.
 
 **If you want to watch it happen,** there's a log file in the Ingest folder called `push_log.txt`. You don't need to understand it. You're looking for one word:
 
@@ -85,7 +89,7 @@ Two other words worth knowing. `SKIP` means a machine wasn't turned on or wasn't
 
 If it's still not there after a couple of minutes:
 
-1. **Is the machine on?** A powered-off or disconnected machine is skipped, not failed, and gets picked up when it appears. Switch it on, check the cable, and it'll be delivered on its own.
+1. **Is the machine on?** A powered-off or disconnected machine is skipped, not failed, and gets picked up when it appears. Switch it on, check the cable, and it'll be delivered on its own — **but only for about 10 minutes.** After that the kit stops waiting and moves on. If a machine was off that long, copy the file in again and it will go across.
 2. **Does the name match what you expect?** See [Sending an updated version](#sending-an-updated-version). Same name and same size is the one case that gets quietly ignored.
 3. **Ask someone technical.** Beyond that it's not your problem to solve, and guessing won't help.
 
@@ -96,7 +100,7 @@ If it's still not there after a couple of minutes:
 - **Don't move, rename or delete a file while it's sending.** Opening or previewing one is fine. The kit waits for a file to stop changing before sending, which is what stops a half-copied file going out — so a file you shuffle around mid-send resets that check.
 - **Don't re-copy a file that's already on its way.** If it's sending, let it send. Everything sent is also saved to an `Archive` folder on the Ingest laptop, so nothing is lost. (Re-copying *is* the fix for a `GIVE UP`, but that's a different situation — see above.)
 - **Don't drag files into the Day folders to speed things up.** Files inside `Day 1` through `Day 5` are left alone on purpose — those are for sorting after delivery. Only files sitting directly in the Ingest folder get sent.
-- **Don't worry about a machine being switched off.** That's expected and handled, and it'll catch up on its own.
+- **Don't worry about a machine being switched off.** That's expected and handled, and it'll catch up on its own — for about 10 minutes. After that, copy the file in again if it still needs to go across.
 - **Don't switch off the Ingest laptop during a show.** If you have to, plug it back in — anything that failed resumes where it left off.
 - **Wi-Fi is irrelevant.** Everything is wired. Nobody needs to join any network or type any password.
 
@@ -123,21 +127,21 @@ The same on all three GFX machines, and the same as the Mac logins. If whoever s
 | Laptop won't connect / no lights | Whoever set up the kit |
 | A file is missing but the log says `DONE` | Whoever set up the kit — the log will tell them which machine it's on |
 | Mac says "unidentified developer" | Not a fault — right-click the file and choose **Open** |
-| A machine asks to restart | Only a GFX machine does this, and only after renaming itself. Let it restart. |
+| A machine asks to restart | Normal. Both the GFX and Mitti machines rename themselves during setup and need a restart after. Let it happen. |
 | Setup file won't open at all | Double-click on Windows, right-click → Open on Mac. Pick the one for that machine. |
 
 In a genuine emergency, the log is the fastest way to a straight answer. Screenshot `push_log.txt` and send it.
 
 ---
 
-## Starting the setup scripts
+## Setting the kit up
 
-**You only need this if you're setting the kit up.** If someone set the rig up
-before you got there, skip to the next section — everything else on this page is
-about putting files on machines, which is the same all show long.
+**Only needed if you're the one preparing the rig.** If it was set up before you
+got there, ignore this section entirely — everything above it is the same all
+show long.
 
-There are six machines and each one is started a slightly different way, because
-Windows, Mac and Linux each put up their own kind of roadblock.
+Six machines, each started a slightly different way, because Windows, Mac and
+Linux each put up their own kind of roadblock.
 
 | Which machine | What to click | Then |
 |---|---|---|
@@ -167,7 +171,12 @@ cd ~/Desktop/show-deploy
 sudo bash ./setup-ingest.sh
 ```
 
-It asks for your Mac login password — not the show password, your own one.
+That asks for **your own login password** on the Ingest laptop — not the show
+password. It's the same password you use to log into that machine normally.
+
+On the Mac setup, the first prompt is also for **your own Mac login password**,
+again to allow the setup to run as an administrator. The *show* password comes
+later, and you can just press Enter at that one.
 
 ### When it asks for the show password
 
