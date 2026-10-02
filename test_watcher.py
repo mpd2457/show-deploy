@@ -385,6 +385,47 @@ def s11_log_rotates(home):
 
 
 @scenario
+def s13_given_up_file_rearms_when_recopied(home):
+    """A GIVE UP file must not spin, but must restart once the file is re-copied.
+
+    Two halves. The first drives a real give-up through the SMB layer: all three
+    GFX machines up, GFX1 refusing every put, zero backoff so 8 attempts burn in
+    seconds. The second drives the re-arm decision directly off a hand-written
+    queue, because a restart deliberately clears given_up and so cannot observe it.
+    """
+    fast = {"SHOWKIT_BACKOFF": "0,0,0,0,0,0,0,0"}
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {"GFX1": {"refuse_put": True}}})
+    drop = home / "Desktop" / "Ingest"
+    drop.mkdir(parents=True, exist_ok=True)
+    f = drop / "stuck.pptx"
+    f.write_bytes(b"s" * 4096)
+    run_watcher(home, 25, extra_env=fast)
+    txt = logtext(home)
+    check("gives up after exhausting attempts", "GIVE UP stuck.pptx" in txt, txt[-700:])
+    check("says how to retry", "re-copy" in txt, txt[-400:])
+    check("healthy machines still got it", "OK   [DECK] -> \\\\GFX2" in txt, txt[-500:])
+
+    puts = len([c for c in calls(home) if c[1] == "GFX1" and "put" in c[2]])
+    check("stopped at 8 attempts, no 9th", puts == 8, f"{puts} puts")
+    q = home / ".config" / "showkit" / "queue.json"
+    entry = json.loads(q.read_text())["stuck.pptx"]
+    check("records the timestamp it gave up at", "gave_up_mtime" in entry, json.dumps(entry))
+    check("marked done so it is not picked up again", entry.get("done") is True, json.dumps(entry))
+
+    # Now the re-arm decision itself, with the watcher left running. A done entry
+    # whose file mtime still matches must be left alone.
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
+    os.utime(f, None)                      # mtime moves => operator re-copied it
+    before = len(calls(home))
+    run_watcher(home, 14, extra_env=fast)
+    txt = logtext(home)
+    check("re-arms a re-copied file", "RE-ARMED stuck.pptx" in txt, txt[-500:])
+    check("re-armed file is delivered again",
+          "DONE stuck.pptx" in txt.split("RE-ARMED")[-1], txt.split("RE-ARMED")[-1][-300:])
+    check("actually pushed again", len(calls(home)) > before, f"{before} -> {len(calls(home))}")
+
+
+@scenario
 def s12_queue_survives_corruption(home):
     set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
     q = home / ".config" / "showkit" / "queue.json"
@@ -403,7 +444,8 @@ def main():
                  s5_in_progress_copy_not_pushed, s6_pushes_run_in_parallel,
                  s7_pending_survives_restart, s8_unknown_extension_goes_everywhere,
                  s9_missing_ingest_dir_is_recreated, s10_day_folders_are_inert,
-                 s11_log_rotates, s12_queue_survives_corruption]
+                 s11_log_rotates, s12_queue_survives_corruption,
+                  s13_given_up_file_rearms_when_recopied]
     only = sys.argv[1:]
     for s in scenarios:
         if only and not any(o in s.__name__ for o in only):

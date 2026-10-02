@@ -14,16 +14,18 @@
     [string]$SharePassword = ""
 )
 $ErrorActionPreference = "Stop"
+# Prompted for rather than baked in, with a default so load-in is not six
+# machines x an invented password. Enter accepts it; type to override.
+$DefaultSharePassword = "showrig"
 if ([string]::IsNullOrWhiteSpace($SharePassword)) {
-    # Prompted for, never baked into this file. Must match what Ingest stores.
-    $secureInput = Read-Host "Share password for local account '$ShareUser'" -AsSecureString
+    $secureInput = Read-Host "Share password for local account '$ShareUser' (Enter = $DefaultSharePassword)" -AsSecureString
     $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureInput)
     try {
         $SharePassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
     } finally {
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
     }
-    if ([string]::IsNullOrWhiteSpace($SharePassword)) { throw "Password cannot be empty." }
+    if ([string]::IsNullOrWhiteSpace($SharePassword)) { $SharePassword = $DefaultSharePassword }
 }
 Write-Host "=== $MachineName setup starting ===" -ForegroundColor Cyan
 $hostsMap = [ordered]@{

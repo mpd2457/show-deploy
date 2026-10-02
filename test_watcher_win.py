@@ -369,6 +369,41 @@ def s10_day_folders_are_inert(home):
 
 
 @scenario
+def s12_given_up_file_rearms_when_recopied(home):
+    """Port of the Python s13: a GIVE UP file must not spin, and must re-arm once
+    its mtime moves. Both watchers share this behaviour, so both are held to it."""
+    # all three GFX up so the file can settle; GFX1 refuses every put
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {"GFX1": {"refuse_put": True}}})
+    d = home / "profile" / "Desktop" / "Ingest"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / "stuck.pptx"
+    f.write_bytes(b"s" * 4096)
+    prelude = "$env:SHOWKIT_BACKOFF = '0,0,0,0,0,0,0,0'\n"
+    run_watcher(home, 60, prelude=prelude)
+    txt = logtext(home)
+    check("gives up after exhausting attempts", "GIVE UP stuck.pptx" in txt, txt[-700:])
+    check("says how to retry", "re-copy" in txt, txt[-400:])
+    check("healthy machines still got it", "OK   [DECK] -> \\\\GFX2" in txt, txt[-500:])
+    puts = len([c for c in calls(home) if c[1] == "GFX1" and c[2].startswith("put ")])
+    check("stopped at 8 attempts, no 9th", puts == 8, f"{puts} puts")
+
+    q = home / "profile" / "AppData" / "Local" / "showkit" / "queue.json"
+    entry = json.loads(q.read_text())["stuck.pptx"]
+    check("records the timestamp it gave up at", "gave_up_mtime" in entry, json.dumps(entry)[:300])
+    check("marked done so it is not picked up again", entry.get("done") is True, json.dumps(entry)[:300])
+
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
+    # re-copy the file: a fresh mtime is the operator saying "try that again"
+    f.write_bytes(b"s" * 4096)
+    os.utime(f, None)
+    run_watcher(home, 60, prelude=prelude)
+    txt = logtext(home)
+    check("re-arms a re-copied file", "RE-ARMED stuck.pptx" in txt, txt[-500:])
+    check("re-armed file is delivered again",
+          "DONE stuck.pptx" in txt.split("RE-ARMED")[-1], txt.split("RE-ARMED")[-1][-300:])
+
+
+@scenario
 def s11_queue_survives_corruption(home):
     set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
     d = home / "profile" / "Desktop" / "Ingest"

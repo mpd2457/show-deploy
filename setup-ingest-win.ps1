@@ -67,11 +67,14 @@ function Read-Secret([string]$Prompt) {
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
 }
 
+# Default offered so load-in is not an invented password per machine. Enter
+# accepts it; type to override.
+$DefaultSharePassword = "showrig"
 if ([string]::IsNullOrWhiteSpace($SharePassword)) {
-    Write-Host "GFX share password for local account '$ShareUser':" -NoNewline
+    Write-Host "GFX share password for local account '$ShareUser' (Enter = $DefaultSharePassword):" -NoNewline
     $SharePassword = Read-Secret " "
 }
-if ([string]::IsNullOrWhiteSpace($SharePassword)) { throw "GFX password cannot be empty." }
+if ([string]::IsNullOrWhiteSpace($SharePassword)) { $SharePassword = $DefaultSharePassword }
 
 Write-Host ""
 $useMacs = Read-Host "Push media to Mitti Macs this show? (y/N)"
@@ -80,10 +83,10 @@ if ($useMacs -match '^[Yy]') {
         $MacUser = Read-Host "Mac login name"
     }
     if ([string]::IsNullOrWhiteSpace($MacPassword)) {
-        Write-Host "Mac login password for '$MacUser':" -NoNewline
+        Write-Host "Mac login password for '$MacUser' (Enter = $DefaultSharePassword):" -NoNewline
         $MacPassword = Read-Secret " "
     }
-    if ([string]::IsNullOrWhiteSpace($MacPassword)) { throw "Mac password cannot be empty." }
+    if ([string]::IsNullOrWhiteSpace($MacPassword)) { $MacPassword = $DefaultSharePassword }
     Write-Host "Mac credentials will be stored for '$MacUser'."
 }
 Write-Host ""

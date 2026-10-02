@@ -42,13 +42,20 @@ ask() {
 
 SMB_USER="show"
 ask "GFX share username" SMB_USER "show"
+# The password is prompted for rather than hardcoded, but a default is offered so
+# load-in is not six machines x an invented password. Enter accepts it; type to
+# override. See the README section "The share password" for what this does and
+# does not protect against.
+DEFAULT_SMB_PASS="showrig"
 while true; do
-    read -r -s -p "GFX share password for '$SMB_USER': " SMB_PASS
+    read -r -s -p "GFX share password for '$SMB_USER' (Enter = $DEFAULT_SMB_PASS): " SMB_PASS
     echo
-    [ -n "$SMB_PASS" ] || echo "Password cannot be empty."
-    if [ -z "${SMB_PASS:-}" ]; then continue; fi
+    [ -n "$SMB_PASS" ] || SMB_PASS="$DEFAULT_SMB_PASS"
     break
 done
+if [ "$SMB_PASS" = "$DEFAULT_SMB_PASS" ]; then
+    echo "Using the default share password."
+fi
 
 MITTI_USER=""
 MITTI_PASS=""
@@ -58,13 +65,11 @@ else
     echo "No TTY: skipping Mac credentials. Re-run interactively to set them."
 fi
 if [ -n "$MITTI_USER" ]; then
-    read -r -s -p "Mac share password for '$MITTI_USER': " MITTI_PASS
+    # Same default as the GFX password. It must match whatever you set on the
+    # Mac itself in setup-mitti.sh, or media pushes will fail.
+    read -r -s -p "Mac login password for '$MITTI_USER' (Enter = $DEFAULT_SMB_PASS): " MITTI_PASS
     echo
-    while [ -z "${MITTI_PASS:-}" ]; do
-        echo "Password cannot be empty."
-        read -r -s -p "Mac share password for '$MITTI_USER': " MITTI_PASS
-        echo
-    done
+    [ -n "$MITTI_PASS" ] || MITTI_PASS="$DEFAULT_SMB_PASS"
 fi
 
 # ------------------------------------------------------------------- packages

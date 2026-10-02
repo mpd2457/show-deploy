@@ -322,7 +322,13 @@ def process(path, entry, queue):
                 if h in given_up and h not in absent
             ]
             if failed:
-                log(f"GIVE UP {name} : {', '.join(failed)} - re-drop the file to try again")
+                # Remember what the file looked like when we gave up. Re-dropping an
+                # identical file is not a new request - enqueue() ignores it and a
+                # done entry is skipped - so "re-drop the file" only works if the
+                # file is actually re-copied, which changes its mtime.
+                entry["gave_up_mtime"] = path.stat().st_mtime_ns
+                log(f"GIVE UP {name} : {', '.join(failed)} - "
+                    f"re-copy the file into Ingest (or rename it) to try again")
             else:
                 extra = f" ({len(absent)} machine(s) never came up)" if absent else ""
                 log(f"DONE {name}{extra}")
@@ -423,6 +429,15 @@ def main():
                 continue
 
             if entry.get("done"):
+                # A file that was given up on (or delivered) stays in the queue and
+                # is skipped. If it has since been re-copied, its mtime has moved:
+                # that is the operator asking for another go, so start it fresh.
+                gu = entry.get("gave_up_mtime")
+                if gu is not None and st.st_mtime_ns != gu:
+                    with _queue_lock:
+                        queue.pop(f.name, None)
+                        _save_queue_locked(queue)
+                    log(f"RE-ARMED {f.name} - file was re-copied after giving up")
                 continue
             needs_retry = any(
                 not entry.get("delivered", {}).get(h)

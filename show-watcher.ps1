@@ -41,7 +41,11 @@ if ($env:SHOWKIT_CONFIG)  {
 $PollSeconds    = 2
 $SettlePolls    = 3
 $MaxAttempts    = 8
-$Backoff        = @(0, 5, 15, 45, 120, 300, 600, 900)
+# Overridable so the offline harness can burn the retry ladder in seconds instead
+# of the 20 minutes the real backoff takes. Same seam the Python watcher uses.
+$Backoff        = @("$env:SHOWKIT_BACKOFF".Split(",") | Where-Object { $_ -ne "" } |
+                    ForEach-Object { [int]$_ })
+if ($Backoff.Count -eq 0) { $Backoff = @(0, 5, 15, 45, 120, 300, 600, 900) }
 $MaxSkips       = 10
 $SkipRetry      = 60
 $LogRotateBytes = 5MB
@@ -345,7 +349,10 @@ function Invoke-Push($Path, $Entry, $Queue) {
                 }
             }
             if ($failed.Count -gt 0) {
-                Write-Log "GIVE UP $name : $($failed -join ', ') - re-drop the file to try again"
+                # See the Python watcher: re-dropping an identical file is not a new
+                # request, so record the mtime and only re-arm if it has moved.
+                Set-EntryProp $Entry "gave_up_mtime" (Get-Item -LiteralPath $path -Force).LastWriteTimeUtc.Ticks
+                Write-Log "GIVE UP $name : $($failed -join ', ') - re-copy the file into Ingest (or rename it) to try again"
             } elseif ($absent -gt 0) {
                 Write-Log "DONE $name ($absent machine(s) never came up)"
             } else {
@@ -452,7 +459,18 @@ while ($true) {
             continue
         }
 
-        if ($null -ne (Get-EntryProp $entry "done")) { continue }
+        if ($null -ne (Get-EntryProp $entry "done")) {
+            # A file that was given up on stays in the queue and is skipped. If it
+            # has since been re-copied its mtime has moved, which is the operator
+            # asking for another go - start it fresh.
+            $guTicks = Get-EntryProp $entry "gave_up_mtime"
+            if ($null -ne $guTicks -and [int64]$guTicks -ne [int64]$f.LastWriteTimeUtc.Ticks) {
+                $queue.Remove($f.Name)
+                Save-Queue $queue
+                Write-Log "RE-ARMED $($f.Name) - file was re-copied after giving up"
+            }
+            continue
+        }
 
         $needs = $false
         foreach ($h in @(Get-Targets $entry.label)) {

@@ -10,6 +10,10 @@ Stick must be exFAT. Copy this whole folder onto it.
 Pro work laptop can take the same role with identical behaviour if mkultra2 is not
 available — see [Windows Ingest](#windows-ingest-fallback).
 
+> **Running a show, not setting one up?** Read [CREW-GUIDE.md](CREW-GUIDE.md) instead.
+> It covers dropping files in, the one naming rule that matters, and what to do when
+> something doesn't arrive. No technical knowledge needed.
+
 ## Contents
 
 | File | Runs on | What it does |
@@ -29,13 +33,14 @@ available — see [Windows Ingest](#windows-ingest-fallback).
 | `show-watcher-mac.sh` | MITTIA/B | the Mac arrival logger |
 | `test_watcher.py` | any | offline tests for the Linux watcher |
 | `test_watcher_win.py` | any | offline tests for the Windows watcher |
+| `CREW-GUIDE.md` | crew | plain-language guide for running a show |
 
 Tests need no rig and touch nothing on it: they fake `ping` and `smbclient` in a
 temp directory and run the real watcher against them.
 
 ```bash
-python3 test_watcher.py        # 49 checks
-python3 test_watcher_win.py    # 40 checks, needs pwsh
+python3 test_watcher.py        # 58 checks
+python3 test_watcher_win.py    # 48 checks, needs pwsh
 ```
 
 ## Network, wired only
@@ -64,14 +69,26 @@ Files land straight in Ingest. Day folders stay empty until you drag into them.
 Decks go to the GFX machines, media to the Mitti Macs, anything else to
 everything — see [What gets pushed where](#what-gets-pushed-where).
 
-Log in as the share user `show`. **No password is stored in this repo.** Every
-setup script prompts for it, and Ingest writes it to `~/.config/showkit/smbcreds`
-at mode 600 (on Windows, to `%LOCALAPPDATA%\showkit` with an ACL for your user
-only). Macs use each Mac's own login, stored the same way in `smbcreds-mitti`.
+Log in as the share user `show`. The password is asked for at setup, not stored
+in this repo. Ingest writes it to `~/.config/showkit/smbcreds` at mode 600 (on
+Windows, to `%LOCALAPPDATA%\showkit` with an ACL for your user only). The Macs
+use each Mac's own login, stored the same way in `smbcreds-mitti`.
 
-Since the warehouse reimages between events, nothing on the rig keeps a
-password longer than one show. Set the same throwaway password on all three
-GFX machines each time you set up, and type it into Ingest once.
+### The share password
+
+The default is **`showrig`**. Press Enter at every prompt to accept it, or type
+something else at any of them. One password across all six machines means load-in
+is not six invented passwords.
+
+Worth being clear about what it is for. The rig is a closed `192.168.50.0/24`
+wired network with no route to the internet, so this password is not protecting
+anything from the internet — it stops a random laptop on the switch from
+overwriting the decks mid-show. For that, `showrig` is fine, and it rotates by
+accident because the warehouse reimages every machine between events.
+
+Set something stronger if the machines ever see an untrusted network, or if you
+keep the machines un-reimaged and in use between events. Either way it goes in
+the repo's history if you commit it, so prefer typing it at the prompt.
 
 ## What you will see in the log
 
@@ -81,6 +98,9 @@ GFX machines each time you set up, and type it into Ingest once.
   FAIL [DECK] -> \\GFX2\ShowShare : name : NT_STATUS_ACCESS_DENIED : retry in 15s, 7 attempt(s) left
   DONE  name                        every target delivered
   GONE  name                        you deleted it from Ingest while it was still queued
+  CHANGED name                      same name, size moved - treated as a new version
+  GIVE UP name : GFX2 (8/8 tries)  gave up; re-copy or rename to retry
+  RE-ARMED name                     a given-up file was re-copied and is being sent again
 
 OK = landed, and the far end confirmed the size. SKIP = machine not here.
 FAIL = password or share, and it will be retried. DONE means you can stop watching.
@@ -177,7 +197,13 @@ FAIL on Mac: smbclient //MITTIA/ShowShare -A ~/.config/showkit/smbcreds-mitti -c
 
 A machine that answers a ping but refuses the share is a FAIL, not a SKIP:
 the share is asleep or the password is wrong. Give it 8 attempts, then
-GIVE UP is logged and the file needs re-dropping.
+GIVE UP is logged. Copy the file into Ingest again (or rename it) to retry —
+re-arming is keyed on the file's timestamp moving, not on the file merely
+still being there.
+
+A file is identified by name and size. Same name with different content *and*
+different size is re-sent as a new version. Same name and same size is treated
+as the same file and left alone — use a new filename when in doubt.
 
 Unsure what is still outstanding:
   cat ~/.config/showkit/queue.json
@@ -193,10 +219,13 @@ moving.
 the file is. A mismatch is a failure and gets retried, so a transfer that dies
 halfway is caught rather than silently accepted.
 
-**Failures retry.** Up to 8 attempts with backoff, then `GIVE UP` and the file
-needs re-dropping. The queue is written to disk, so if Ingest reboots mid-show
-it resumes instead of starting over. Backoff timers reset on restart, because a
-restart usually means the rig just came up.
+**Failures retry.** Up to 8 attempts with backoff, then `GIVE UP`. To retry a
+given-up file, copy it into Ingest again — the watcher remembers the file's
+timestamp from when it gave up and only starts over once that changes, so
+leaving a failed file sitting in the folder does not loop it forever. The queue
+is written to disk, so if Ingest reboots mid-show it resumes instead of starting
+over. Backoff timers reset on restart, because a restart usually means the rig
+just came up.
 
 **Absence is not failure.** A machine that does not answer a ping is `SKIP`ped
 and re-checked every 60s for 10 minutes, without spending retry attempts. A
