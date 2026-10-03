@@ -382,3 +382,22 @@ watchers run unattended once set up, which is what lets the Ingest laptop sit
 closed on the table: on Linux a systemd **user** service with linger enabled, so
 it survives logout and runs before anyone signs in; on Windows a scheduled task
 at logon. Neither starts on its own if the machine is off — obviously.
+
+## Future upgrades (not built yet)
+
+- **Cloud inbox sync (OneDrive + Google Drive).** Let the Ingest watcher pull
+  from a cloud folder as well as the local drop folder, so a producer can drop
+  a deck into a shared OneDrive/Google Drive folder from anywhere and it lands
+  on the GFX machines without touching the Ingest laptop. Sketch:
+  - `rclone` (one binary, both backends, headless-friendly) running
+    `rclone sync remote:ShowInbox ~/ShowShare/Ingest-cloud` on a timer; the
+    existing watcher treats that folder like the local drop folder, so archive /
+    push / log logic is unchanged.
+  - Cloud pull is **best-effort over the Wi-Fi/hotspot link only** — show-time
+    pushes stay on the closed wired switch and must keep working with no
+    internet.
+  - Needs: rclone config + tokens kept in `~/.config/showkit/` (0600, removed by
+    restore-ingest.sh), a per-show remote folder name, and a `CLOUD` tag in
+    push_log.txt so the troubleshooting table can tell the source apart.
+  - Optional reverse direction: mirror `~/ShowShare/Archive` back up to the
+    cloud as an off-site copy of everything that was shown.
