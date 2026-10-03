@@ -396,8 +396,16 @@ at logon. Neither starts on its own if the machine is off — obviously.
   - Cloud pull is **best-effort over the Wi-Fi/hotspot link only** — show-time
     pushes stay on the closed wired switch and must keep working with no
     internet.
-  - Needs: rclone config + tokens kept in `~/.config/showkit/` (0600, removed by
-    restore-ingest.sh), a per-show remote folder name, and a `CLOUD` tag in
-    push_log.txt so the troubleshooting table can tell the source apart.
+  - **Operators sign in with their own personal or work accounts** at load-in —
+    nothing is pre-baked. So: an `rclone config` style sign-in step in
+    setup-ingest.sh (browser OAuth on the Ingest desktop; `rclone authorize` on
+    a phone/other laptop if headless), one remote per operator
+    (`od-<name>`, `gd-<name>`), each pointing at a folder they pick. Work
+    accounts may block third-party OAuth apps (Entra/Workspace admin consent) —
+    fall back to a shared link / "Add shortcut to My Drive" or a personal
+    account if so.
+  - Tokens live in `~/.config/showkit/rclone.conf` (0600) and are **wiped by
+    restore-ingest.sh** so no operator's login outlives the gig; a `CLOUD:<remote>`
+    tag in push_log.txt shows which account a file came from.
   - Optional reverse direction: mirror `~/ShowShare/Archive` back up to the
     cloud as an off-site copy of everything that was shown.
