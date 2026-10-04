@@ -12,7 +12,9 @@ For the detail behind any of this, see the [main README](README.md).
 
 ## The short version
 
-**One folder. Drop the file in. Check it arrived. Done.**
+**One folder. Drop the file in. Watch it go green on the dashboard. Done.**
+
+Open **http://localhost:8080** on the Ingest laptop's browser for a live status view.
 
 Everything else on this page is detail for when something goes wrong.
 
@@ -67,11 +69,21 @@ The log ends with `GIVE UP` if a machine refused the file every time — usually
 
 ## Checking it worked
 
-**The easiest check: go and look at the machine.**
+**The easiest check: open the dashboard.**
 
-If you dropped a deck, the GFX machines will have a copy in their Ingest folder. If you dropped media, the Mitti machines will have it. Just walk over and look. If it's on the machine, it's there — the kit checks each file after sending it and won't call it done if the size doesn't match.
+On the Ingest laptop, open a browser and go to:
 
-**If you want to watch it happen,** there's a log file in the Ingest folder called `push_log.txt`. You don't need to understand it. You're looking for one word:
+    http://localhost:8080
+
+You'll see a live table of every file — green means done, yellow means still sending, red means something needs attention. It updates every few seconds automatically. No log-reading needed.
+
+**Desktop notifications** — when a file finishes sending, a notification pops up in the corner of the screen automatically. You don't need to do anything to enable this. A red notification means something failed and needs a human.
+
+**If you prefer the terminal,** there's a quick summary command:
+
+    bash ~/Desktop/show-deploy/show-status.sh
+
+**If you want to watch it happen in detail,** there's a log file in the Ingest folder called `push_log.txt`. You don't need to understand it. You're looking for one word:
 
 ```
 DONE   opening_v2.pptx
@@ -163,8 +175,7 @@ refuses it and says it's "from an unidentified developer". That isn't a fault,
 it's just how Mac does first-time approval. **Right-click the file, choose
 Open**, and confirm. After that, double-clicking works like normal.
 
-**On Linux, use a terminal.** Open the terminal app, type these two lines, and
-press Enter after each:
+**On Linux, use a terminal — or the desktop launcher.** If a **Show Deploy Setup** icon is on the Desktop, double-click it and type your login password when asked. If the icon isn't there, open the terminal app, type these two lines, and press Enter after each:
 
 ```
 cd ~/Desktop/show-deploy

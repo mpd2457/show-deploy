@@ -36,6 +36,14 @@ rm -f "$WATCHER" && echo "Removed watcher script"
 
 # 2. Credentials and the push queue (queue.json lives in the same folder)
 if [ -d "$CONF_DIR" ]; then rm -rf "$CONF_DIR"; echo "Removed SMB credentials and push queue ($CONF_DIR)"; fi
+# Remove cloud sync timer and rclone config if present (wiped per spec)
+rm -f "$UNIT_DIR/showcloudsync.service" "$UNIT_DIR/showcloudsync.timer" 2>/dev/null || true
+rm -rf "$USER_HOME/.config/systemd/user/timers.target.wants/showcloudsync.timer" 2>/dev/null || true
+asuser systemctl --user daemon-reload 2>/dev/null || true
+asuser systemctl --user reset-failed showcloudsync 2>/dev/null || true
+asuser systemctl --user stop showcloudsync.timer 2>/dev/null || true
+asuser systemctl --user stop showcloudsync.service 2>/dev/null || true
+echo "Removed cloud sync timer/config references (if any)"
 
 # 3. Wired static IP -> back to normal DHCP
 if command -v nmcli >/dev/null && systemctl is-active --quiet NetworkManager; then
@@ -70,10 +78,10 @@ fi
 
 # 5. Show folders
 if [ "$PURGE" -eq 1 ]; then
-    rm -rf "$DROP_DIR" "$ARCHIVE_DIR"
+    rm -rf "$DROP_DIR" "$ARCHIVE_DIR" "$USER_HOME/Desktop/Ingest-cloud" 2>/dev/null || true
     echo "Deleted $DROP_DIR and $ARCHIVE_DIR"
 else
-    for d in "$DROP_DIR" "$ARCHIVE_DIR"; do
+    for d in "$DROP_DIR" "$ARCHIVE_DIR" "$USER_HOME/Desktop/Ingest-cloud"; do
         [ -d "$d" ] && echo "Kept $d ($(find "$d" -type f | wc -l) files) - rerun with --purge to delete"
     done
     echo "Read the push log before you delete it: $DROP_DIR/push_log.txt"

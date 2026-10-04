@@ -21,8 +21,11 @@ CREDS="$CONF_DIR/smbcreds"
 CREDS_MITTI="$CONF_DIR/smbcreds-mitti"
 WATCHER_SRC="$SCRIPT_DIR/show-watcher.py"
 WATCHER="$USER_HOME/.local/bin/show-watcher.py"
+DASHBOARD_SRC="$SCRIPT_DIR/show-dashboard.py"
+DASHBOARD="$USER_HOME/.local/bin/show-dashboard.py"
 UNIT_DIR="$USER_HOME/.config/systemd/user"
 SERVICE="showwatcher"
+DASHBOARD_SERVICE="showdashboard"
 DAY_NAMES=("Day 1" "Day 2" "Day 3" "Day 4" "Day 5")
 
 echo "=== Ingest setup starting (user: $SUDO_USER) ==="
@@ -75,7 +78,11 @@ fi
 # ------------------------------------------------------------------- packages
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq smbclient inotify-tools iputils-ping psmisc >/dev/null
+apt-get install -y -qq smbclient inotify-tools iputils-ping psmisc curl >/dev/null
+# Install rclone if not present
+if ! command -v rclone >/dev/null 2>&1; then
+    curl -fsSL https://rclone.org/install.sh | bash >/dev/null 2>&1 || true
+fi
 
 # ------------------------------------------------------------------- interface
 IFACE="${1:-}"
@@ -154,14 +161,33 @@ unset SMB_PASS MITTI_PASS
 if [ ! -f "$WATCHER_SRC" ]; then
     echo "Cannot find $WATCHER_SRC. Copy the whole show-deploy folder."; exit 1
 fi
+if [ ! -f "$DASHBOARD_SRC" ]; then
+    echo "Cannot find $DASHBOARD_SRC. Copy the whole show-deploy folder."; exit 1
+fi
 install -m 0755 "$WATCHER_SRC" "$WATCHER"
 
+# --------------------------------------------------------------------- watcher service
 cat > "$UNIT_DIR/$SERVICE.service" <<EOF
 [Unit]
 Description=Show push watcher (Desktop/Ingest -> GFX decks, Mitti media)
 [Service]
 ExecStart=/usr/bin/python3 $WATCHER
 Nice=10
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=default.target
+EOF
+
+# --------------------------------------------------------------------- dashboard service
+install -m 0755 "$DASHBOARD_SRC" "$DASHBOARD"
+
+cat > "$UNIT_DIR/$DASHBOARD_SERVICE.service" <<EOF
+[Unit]
+Description=Show Deploy Dashboard (http://localhost:8080)
+After=network.target $SERVICE.service
+[Service]
+ExecStart=/usr/bin/python3 $DASHBOARD
 Restart=always
 RestartSec=5
 [Install]
@@ -177,7 +203,101 @@ UID_="$(id -u "$SUDO_USER")"
 sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$UID_" systemctl --user daemon-reload
 sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$UID_" systemctl --user enable --now "$SERVICE.service"
 sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$UID_" systemctl --user restart "$SERVICE.service"
+sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$UID_" systemctl --user enable --now "$DASHBOARD_SERVICE.service"
+sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$UID_" systemctl --user restart "$DASHBOARD_SERVICE.service"
+echo "Dashboard running at http://localhost:8080"
 
+
+# --------------------------------------------------------------------- cloud sync (rclone)
+CLOUD_DROP_DIR="$USER_HOME/Desktop/Ingest-cloud"
+mkdir -p "$CLOUD_DROP_DIR" "$CONF_DIR"
+
+echo
+echo "=== Cloud inbox sync (OneDrive/Google Drive) ==="
+echo "This sets up optional cloud sync. Files pulled to $CLOUD_DROP_DIR appear there for inspection; move them to $DROP_DIR to push."
+if [ -t 0 ]; then
+    read -r -p "Configure cloud sync now? [y/N]: " CONFIG_CLOUD
+else
+    CONFIG_CLOUD="n"
+fi
+CONFIG_CLOUD=$(echo "$CONFIG_CLOUD" | tr '[:upper:]' '[:lower:]')
+
+if [ "$CONFIG_CLOUD" = "y" ] || [ "$CONFIG_CLOUD" = "yes" ]; then
+    if ! command -v rclone >/dev/null 2>&1; then
+        echo "rclone not found; attempting install..."
+        curl -fsSL https://rclone.org/install.sh | bash >/dev/null 2>&1 || true
+    fi
+    if command -v rclone >/dev/null 2>&1; then
+        RCLONE_CONF_PATH="$CONF_DIR/rclone.conf"
+        export RCLONE_CONFIG="$RCLONE_CONF_PATH"
+        if [ ! -f "$RCLONE_CONF_PATH" ]; then
+            touch "$RCLONE_CONF_PATH"
+            chmod 600 "$RCLONE_CONF_PATH"
+        fi
+        echo "Configure remotes (e.g., od-producer, gd-producer). Type 'done' when finished."
+        while true; do
+            read -r -p "Add remote? [name or done]: " REMOTE_NAME
+            if [ -z "$REMOTE_NAME" ]; then
+                continue
+            fi
+            rnl=$(echo "$REMOTE_NAME" | tr '[:upper:]' '[:lower:]')
+            if [ "$rnl" = "done" ]; then
+                break
+            fi
+            sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$UID_" rclone config create "$REMOTE_NAME" auto config_is_local false 2>&1 || true
+        done
+        CLOUD_SYNC_SCRIPT="$USER_HOME/.local/bin/show-cloudsync.sh"
+        cat > "$CLOUD_SYNC_SCRIPT" <<'EOS'
+#!/bin/bash
+set -euo pipefail
+USER_HOME="$(getent passwd "${SUDO_USER:-$USER}" | cut -d: -f6 2>/dev/null || echo "$HOME")"
+CONF_DIR="$USER_HOME/.config/showkit"
+RCLONE_CONF="$CONF_DIR/rclone.conf"
+CLOUD_DROP="$USER_HOME/Desktop/Ingest-cloud"
+export RCLONE_CONFIG="$RCLONE_CONF"
+mkdir -p "$CLOUD_DROP"
+if [ -f "$RCLONE_CONF" ]; then
+  remotes=$(rclone listremotes 2>/dev/null | tr '\n' ' ')
+  for r in $remotes; do
+    rname=${r%:}
+    # copy, not sync: sync deletes anything at the destination that the source
+    # does not have, so with two remotes each pass would wipe the other's files.
+    # copy overwrites a file whose size or mtime changed, so a re-uploaded deck
+    # does update the local copy.
+    rclone copy "${rname}:ShowInbox" "$CLOUD_DROP" 2>/dev/null || \
+    rclone copy "${rname}:" "$CLOUD_DROP" --include "ShowInbox/**" 2>/dev/null || true
+  done
+fi
+EOS
+        chmod +x "$CLOUD_SYNC_SCRIPT"
+        chown "$SUDO_USER:$SUDO_USER" "$CLOUD_SYNC_SCRIPT" "$CLOUD_DROP" "$RCLONE_CONF_PATH" 2>/dev/null || true
+        cat > "$UNIT_DIR/showcloudsync.service" <<EOF
+[Unit]
+Description=Cloud inbox sync (rclone pull to Desktop/Ingest-cloud)
+[Service]
+Type=oneshot
+ExecStart=/bin/bash $CLOUD_SYNC_SCRIPT
+EOF
+        cat > "$UNIT_DIR/showcloudsync.timer" <<EOF
+[Unit]
+Description=Run cloud sync every 30 seconds
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=30
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF
+        chown "$SUDO_USER:$SUDO_USER" "$UNIT_DIR/showcloudsync.service" "$UNIT_DIR/showcloudsync.timer" 2>/dev/null || true
+        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$UID_" systemctl --user daemon-reload
+        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$UID_" systemctl --user enable --now showcloudsync.timer
+        echo "Cloud sync configured (timer every 30s)."
+    else
+        echo "rclone install failed; skipping cloud sync."
+    fi
+else
+    echo "Skipping cloud sync."
+fi
 echo "=== Ingest setup complete ==="
 echo "Drop files in $DROP_DIR"
 echo "Archive: $ARCHIVE_DIR"

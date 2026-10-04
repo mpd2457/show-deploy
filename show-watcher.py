@@ -33,8 +33,10 @@ CREDS_GFX = CONF / "smbcreds"
 CREDS_MITTI = CONF / "smbcreds-mitti"
 QUEUE_FILE = CONF / "queue.json"
 DROP = HOME / "Desktop" / "Ingest"
+CLOUD_DROP = HOME / "Desktop" / "Ingest-cloud"
 ARCHIVE = HOME / "Desktop" / "Archive"
 LOG = DROP / "push_log.txt"
+RCLONE_CONF = CONF / "rclone.conf"
 
 GFX_TARGETS = ["GFX1", "GFX2", "GFX3"]
 MITTI_TARGETS = ["MITTIA", "MITTIB"]
@@ -94,6 +96,33 @@ def log(msg):
             print(f"LOG WRITE FAILED: {e}", file=sys.stderr)
 
 
+# ----------------------------------------------------------------- notifications
+
+_NOTIFY_BIN = shutil.which("notify-send")
+
+
+def notify(urgency, timeout_ms, icon, title, body):
+    """Fire a desktop notification non-blockingly; silently skip if notify-send absent."""
+    if not _NOTIFY_BIN:
+        return
+    try:
+        subprocess.Popen(
+            [
+                _NOTIFY_BIN,
+                "-u", urgency,
+                "-t", str(timeout_ms),
+                "-i", icon,
+                title,
+                body,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+        )
+    except OSError:
+        pass
+
+
 # ------------------------------------------------------------------- durable queue
 # entry: {"size": int, "targets": {host: attempts}, "label": str, "queued": iso}
 
@@ -126,7 +155,7 @@ def save_queue(queue):
         _save_queue_locked(queue)
 
 
-def enqueue(path, queue):
+def enqueue(path, queue, src=None):
     name = path.name
     size = path.stat().st_size
     label = classify(path)
@@ -140,8 +169,11 @@ def enqueue(path, queue):
             "label": label,
             "queued": datetime.now().isoformat(timespec="seconds"),
         }
+        if src:
+            queue[name]["src"] = src
         _save_queue_locked(queue)
-    log(f"QUEUED {name} [{label}]")
+    src_tag = f" {src}" if src else ""
+    log(f"QUEUED {name} [{label}]{src_tag}")
     return True
 
 
@@ -239,11 +271,12 @@ def process(path, entry, queue):
     with _queue_lock:
         already_archived = entry.get("archived")
         entry["archived"] = True
+        src_tag = entry.get("src") or ""
     if not already_archived:
         try:
             shutil.copy2(path, ARCHIVE / name)
         except Exception as e:
-            log(f"ARCHIVE FAILED : {name} : {e}")
+            log(f"ARCHIVE FAILED : {name} {src_tag}: {e}")
 
     # decide the work list under the lock, then release it: _queue_lock is a plain
     # threading.Lock and is NOT reentrant across the worker threads below.
@@ -265,21 +298,25 @@ def process(path, entry, queue):
             ok, detail = push_one(host, path, expected)
         except Exception as e:
             ok, detail = False, str(e)
+        src_tag = entry.get("src") or ""
         with _queue_lock:
             if ok is None:
                 n = entry.setdefault("skip_count", {}).get(host, 0) + 1
                 entry["skip_count"][host] = n
                 if n <= MAX_SKIPS:
                     entry.setdefault("next_try", {})[host] = time.time() + SKIP_RETRY
-                    log(f"SKIP [{label}] -> {dest(host)} : {name} "
+                    log(f"SKIP [{label}] -> {dest(host)} : {name} {src_tag}"
                         f"(machine not present, will check again in {SKIP_RETRY}s)")
                 else:
                     # machine stayed away for the whole window: stop watching it,
                     # but do not spend a retry attempt on it
                     entry.setdefault("given_up", {})[host] = "machine never came up"
                     entry.get("next_try", {}).pop(host, None)
-                    log(f"SKIP [{label}] -> {dest(host)} : {name} "
+                    log(f"SKIP [{label}] -> {dest(host)} : {name} {src_tag}"
                         f"(never came up, not retrying this machine)")
+                    notify("normal", 8000, "dialog-warning",
+                           "Show Deploy",
+                           f"{host} never came up — re-drop {name} if it needs to go there")
                 _save_queue_locked(queue)
                 return
             entry.setdefault("skip_count", {}).pop(host, None)
@@ -290,16 +327,16 @@ def process(path, entry, queue):
                 entry.setdefault("delivered", {})[host] = True
                 next_try.pop(host, None)
                 suffix = f" : {detail}" if detail else ""
-                log(f"OK   [{label}] -> {dest(host)} : {name} ({entry['targets'][host]} attempt){suffix}")
+                log(f"OK   [{label}] -> {dest(host)} : {name} {src_tag}({entry['targets'][host]} attempt){suffix}")
             else:
                 delay = BACKOFF[min(entry["targets"][host], len(BACKOFF) - 1)]
                 next_try[host] = time.time() + delay
                 left = MAX_ATTEMPTS - entry["targets"][host]
                 if left <= 0:
                     entry["given_up"][host] = detail
-                    log(f"FAIL [{label}] -> {dest(host)} : {name} : {detail} : giving up")
+                    log(f"FAIL [{label}] -> {dest(host)} : {name} {src_tag}: {detail} : giving up")
                 else:
-                    log(f"FAIL [{label}] -> {dest(host)} : {name} : {detail} "
+                    log(f"FAIL [{label}] -> {dest(host)} : {name} {src_tag}: {detail} "
                         f": retry in {delay}s, {left} attempt(s) left")
         _save_queue_locked(queue)
 
@@ -321,25 +358,59 @@ def process(path, entry, queue):
                 for h in target_list
                 if h in given_up and h not in absent
             ]
+            src_tag = entry.get("src") or ""
             if failed:
                 # Remember what the file looked like when we gave up. Re-dropping an
                 # identical file is not a new request - enqueue() ignores it and a
                 # done entry is skipped - so "re-drop the file" only works if the
                 # file is actually re-copied, which changes its mtime.
                 entry["gave_up_mtime"] = path.stat().st_mtime_ns
-                log(f"GIVE UP {name} : {', '.join(failed)} - "
+                log(f"GIVE UP {name} {src_tag}: {', '.join(failed)} - "
                     f"re-copy the file into Ingest (or rename it) to try again")
+                notify("critical", 0, "dialog-error",
+                       "Show Deploy",
+                       f"GIVE UP: {name} — re-copy to retry")
             else:
                 extra = f" ({len(absent)} machine(s) never came up)" if absent else ""
-                log(f"DONE {name}{extra}")
+                log(f"DONE {name} {src_tag}{extra}")
+                notify("low", 5000, "dialog-ok",
+                       "Show Deploy",
+                       f"DONE: {name}")
     _save_queue_locked(queue)
 
 
 # -------------------------------------------------------------------------- loop
 
 
+def _cloud_source_for(path):
+    """Return the cloud remote/source tag for files that came from cloud, or None."""
+    try:
+        # If the file is in CLOUD_DROP, try to infer source from rclone state?
+        # Or store metadata. For now, check if it's in cloud drop dir.
+        cloud_drop = CLOUD_DROP.resolve()
+        try:
+            p_res = path.resolve()
+            if cloud_drop in p_res.parents or p_res == cloud_drop:
+                return "CLOUD:ingest"
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return None
+
+
 def listing():
-    return [p for p in DROP.iterdir() if p.is_file() and p.name not in IGNORE]
+    files = []
+    for src_dir, src_tag in [(DROP, None), (CLOUD_DROP, "CLOUD:ingest")]:
+        try:
+            if not src_dir.exists():
+                continue
+            for p in src_dir.iterdir():
+                if p.is_file() and p.name not in IGNORE:
+                    files.append((p, src_tag))
+        except OSError:
+            continue
+    return files
 
 
 def is_open(path):
@@ -357,7 +428,7 @@ def sweep(queue):
     """Drop queue entries whose file is gone, and re-arm ones that are still due."""
     with _queue_lock:
         for name in list(queue):
-            if not (DROP / name).exists():
+            if not (DROP / name).exists() and not (CLOUD_DROP / name).exists():
                 log(f"GONE  {name} - removed from Ingest, dropping from queue")
                 del queue[name]
         _save_queue_locked(queue)
@@ -387,6 +458,7 @@ def main():
         entry.pop("given_up", None)
     if resumed:
         save_queue(queue)
+    CLOUD_DROP.mkdir(parents=True, exist_ok=True)
     log(f"Watcher started, {len(resumed)} file(s) carried over from last run")
 
     while running["go"]:
@@ -397,12 +469,16 @@ def main():
             continue
 
         due = []
-        for f in files:
+        for f_item in files:
+            if isinstance(f_item, tuple):
+                f, src_tag = f_item
+            else:
+                f, src_tag = f_item, None
             try:
                 st = f.stat()
             except OSError:
                 continue
-            sig = (st.st_size, st.st_mtime_ns)
+            sig = (st.st_size, st.st_mtime_ns, str(f.parent))
 
             entry = queue.get(f.name)
             if entry is not None and entry.get("size") != st.st_size:
@@ -424,7 +500,7 @@ def main():
                 count = prev[1] + 1
                 stable[f.name] = (sig, count)
                 if count >= SETTLE_POLLS and not is_open(f):
-                    if enqueue(f, queue):
+                    if enqueue(f, queue, src=src_tag):
                         stable.pop(f.name, None)
                 continue
 
@@ -446,11 +522,15 @@ def main():
                 for h in targets_for(entry["label"])
             )
             if needs_retry and not is_open(f):
-                due.append(f)
+                due.append((f, entry.get("src")))
 
-        stable = {k: v for k, v in stable.items() if (DROP / k).exists()}
+        stable = {k: v for k, v in stable.items() if (DROP / k).exists() or (CLOUD_DROP / k).exists()}
 
-        for f in due:
+        for item in due:
+            if isinstance(item, tuple):
+                f, src_tag = item
+            else:
+                f, src_tag = item, None
             entry = queue.get(f.name)
             if entry:
                 process(f, entry, queue)

@@ -26,6 +26,10 @@ available — see [Windows Ingest](#windows-ingest-fallback).
 | `RUN-ingest-win.bat` / `RUN-ingest-win-restore.bat` | Windows Ingest | double-click wrappers that request elevation themselves |
 | `show-watcher.py` | Linux Ingest | the push watcher itself |
 | `show-watcher.ps1` | Windows Ingest | the same watcher, ported |
+| `show-dashboard.py` | Linux Ingest | live status dashboard at http://localhost:8080 |
+| `show-status.sh` | Linux Ingest | quick human-readable status summary in the terminal |
+| `show-deploy.desktop` / `RUN-ingest.desktop` | Linux Ingest | double-click launcher for setup-ingest.sh |
+| `install-desktop-launcher.sh` | Linux Ingest | puts the launcher on the Desktop |
 | `setup-gfx.ps1` | GFX1-3 | Windows deck machines: IP, share, arrival log |
 | `RUN-gfx1.bat` … `RUN-gfx3.bat` | GFX1-3 | one per machine, so you cannot run the wrong one |
 | `setup-mitti.sh` | MITTIA/B | Mac video/audio: IP, share, arrival log |
@@ -157,6 +161,17 @@ cd ~/Desktop/show-deploy
 sudo bash ./setup-ingest.sh
 ```
 
+Alternatively, run `install-desktop-launcher.sh` once to put a double-click
+launcher on the Desktop:
+
+```
+bash ~/Desktop/show-deploy/install-desktop-launcher.sh
+```
+
+After that, **Show Deploy Setup** appears on the Desktop and can be double-clicked
+like any other app. It opens a terminal and runs the setup script with a visible
+password prompt.
+
 ### What each script asks
 
 All of them prompt for the share password. **Press Enter to accept `showrig`**
@@ -225,6 +240,25 @@ goes wrong, the log names the machine and the reason.
 
 Every show: power on, cable Ingest, drop files with a new filename each version.
 Sort into Day 1-Day 5 yourself.
+
+### Crew-friendly status tools (Linux Ingest)
+
+Two easier ways to check status without reading the raw log:
+
+**Live dashboard** — open a browser on the Ingest laptop and go to:
+
+    http://localhost:8080
+
+A table shows every file, its status (✅ Done / 🔄 Sending / ❌ Failed / ⏳ Queued), which machines have it, and the recent log. Auto-refreshes every 3 seconds. Started automatically by `setup-ingest.sh` as a systemd service alongside the watcher. No setup needed by crew.
+
+**Quick terminal summary** — from anywhere on the Ingest machine:
+
+    bash ~/Desktop/show-deploy/show-status.sh
+
+Prints a human-readable summary grouped by status. Useful for a quick sanity check at the top of a session.
+
+**Desktop notifications** — the watcher fires a toast notification (bottom-right corner) on every DONE, GIVE UP, and expired-machine event. No action needed; they appear automatically.
+
 
 ### Logs and rotation
 
@@ -385,27 +419,25 @@ at logon. Neither starts on its own if the machine is off — obviously.
 
 ## Future upgrades (not built yet)
 
-- **Cloud inbox sync (OneDrive + Google Drive).** Let the Ingest watcher pull
-  from a cloud folder as well as the local drop folder, so a producer can drop
-  a deck into a shared OneDrive/Google Drive folder from anywhere and it lands
-  on the GFX machines without touching the Ingest laptop. Sketch:
-  - `rclone` (one binary, both backends, headless-friendly) running
-    `rclone sync remote:ShowInbox ~/ShowShare/Ingest-cloud` on a timer; the
-    existing watcher treats that folder like the local drop folder, so archive /
-    push / log logic is unchanged.
-  - Cloud pull is **best-effort over the Wi-Fi/hotspot link only** — show-time
-    pushes stay on the closed wired switch and must keep working with no
-    internet.
-  - **Operators sign in with their own personal or work accounts** at load-in —
-    nothing is pre-baked. So: an `rclone config` style sign-in step in
-    setup-ingest.sh (browser OAuth on the Ingest desktop; `rclone authorize` on
-    a phone/other laptop if headless), one remote per operator
-    (`od-<name>`, `gd-<name>`), each pointing at a folder they pick. Work
-    accounts may block third-party OAuth apps (Entra/Workspace admin consent) —
-    fall back to a shared link / "Add shortcut to My Drive" or a personal
-    account if so.
-  - Tokens live in `~/.config/showkit/rclone.conf` (0600) and are **wiped by
-    restore-ingest.sh** so no operator's login outlives the gig; a `CLOUD:<remote>`
-    tag in push_log.txt shows which account a file came from.
-  - Optional reverse direction: mirror `~/ShowShare/Archive` back up to the
-    cloud as an off-site copy of everything that was shown.
+- **Windows dashboard.** `show-dashboard.py` runs on the Linux Ingest machine.
+  A matching dashboard for the Windows Ingest fallback (`show-watcher.ps1`) is
+  not yet built.
+- **Windows desktop notifications.** `notify-send` toast notifications are
+  Linux-only. Windows Ingest shows no DONE/FAIL toasts yet.
+
+## What was recently added
+
+- **Live dashboard** (`show-dashboard.py`) — http://localhost:8080, auto-started
+  by `setup-ingest.sh`, no crew action needed.
+- **Desktop notifications** — `notify-send` toasts on DONE, GIVE UP, and
+  expired-machine events. Fires automatically from the watcher.
+- **show-status.sh** — human-readable terminal summary of the queue.
+- **Desktop launcher** (`show-deploy.desktop`) — double-click to run
+  `setup-ingest.sh` without opening a terminal manually.
+  Install with `bash install-desktop-launcher.sh`.
+- **Cloud inbox sync (OneDrive + Google Drive)** — `setup-ingest.sh` now
+  optionally configures rclone to pull files from a cloud folder into
+  `~/Desktop/Ingest-cloud` every 30 seconds. Files there are pushed to the rig
+  automatically (tagged `CLOUD:ingest` in the log). Tokens are wiped by
+  `restore-ingest.sh`. See the cloud sync section in `setup-ingest.sh` for
+  details on the rclone OAuth flow.

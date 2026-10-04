@@ -1,0 +1,24 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Show Deploy Setup
+Comment=Set up the show rig (run once at load-in)
+Icon=utilities-terminal
+Terminal=true
+Categories=System;
+
+# Wrapper tries gnome-terminal → xterm → konsole → x-terminal-emulator
+# so the launcher works on GNOME, XFCE, KDE, and Debian/Ubuntu defaults.
+Exec=bash -c 'SCRIPT="/home/miked/Desktop/show-deploy/setup-ingest.sh"; \
+  if command -v gnome-terminal >/dev/null 2>&1; then \
+    gnome-terminal -- bash -c "sudo bash \"$SCRIPT\"; echo; echo --- Done. Press Enter to close ---; read"; \
+  elif command -v xterm >/dev/null 2>&1; then \
+    xterm -e "sudo bash \"$SCRIPT\"; echo; echo --- Done. Press Enter to close ---; read"; \
+  elif command -v konsole >/dev/null 2>&1; then \
+    konsole -e bash -c "sudo bash \"$SCRIPT\"; echo; echo --- Done. Press Enter to close ---; read"; \
+  elif command -v x-terminal-emulator >/dev/null 2>&1; then \
+    x-terminal-emulator -e bash -c "sudo bash \"$SCRIPT\"; echo; echo --- Done. Press Enter to close ---; read"; \
+  else \
+    zenity --error --text="No terminal emulator found. Please run: sudo bash $SCRIPT" 2>/dev/null \
+      || echo "No terminal found. Run: sudo bash $SCRIPT"; \
+  fi'
