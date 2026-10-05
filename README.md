@@ -1,8 +1,13 @@
 # Show Deployment Kit
 
-Pushes files from one Ingest laptop to the rest of a show rig over SMB, and nothing
-else. Drop a deck in a folder, it lands on the GFX machines. Drop media, it lands on
-the Macs. Machines that are off are skipped rather than failed. Nothing auto-opens.
+Push PowerPoint decks and video clips from one Ingest laptop to the show rig over
+SMB, and nothing else. The rig is three graphics machines and two Macs running
+Mitti, all hard-wired to a private switch.
+
+Drop a deck in a folder and it lands on the GFX machines. Drop media and it lands on
+the Macs. Transfers retry, every file is verified by size on arrival, and machines
+that are off are skipped rather than failed. Nothing auto-opens. Runs on Linux,
+macOS or Windows.
 
 Stick must be exFAT. Copy this whole folder onto it.
 
