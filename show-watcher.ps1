@@ -38,7 +38,11 @@ if ($env:SHOWKIT_CONFIG)  {
     $LogFile    = Join-Path $DropDir "push_log.txt"
 }
 
+# Overridable so the offline harness can poll fast instead of paying the real
+# interval on every scenario. Same seam the Python watcher uses. Defaults to 2.
 $PollSeconds    = 2
+if ($env:SHOWKIT_POLL_SECONDS) { $PollSeconds = [double]$env:SHOWKIT_POLL_SECONDS }
+if ($PollSeconds -le 0) { $PollSeconds = 2 }
 $SettlePolls    = 3
 $MaxAttempts    = 8
 # Overridable so the offline harness can burn the retry ladder in seconds instead

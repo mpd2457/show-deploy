@@ -130,6 +130,12 @@ def run_watcher(home, seconds, extra_env=None):
     env["HOME"] = str(home)
     env["FAKE_HOME"] = str(home)
     env["PATH"] = f"{FAKEBIN}:{env['PATH']}"
+    # Poll fast so the suite finishes in seconds instead of minutes. Real sleeps
+    # are only meaningful against a real rig; here the fakes answer instantly, so
+    # the only thing a slow poll buys is wall-clock time. Not zero -- SETTLE_POLLS
+    # still needs three distinct samples to see a file stop changing, and the
+    # "still being written" scenario depends on that gap being observable.
+    env.setdefault("SHOWKIT_POLL_SECONDS", "0.05")
     if extra_env:
         env.update(extra_env)
     proc = subprocess.Popen(
@@ -145,6 +151,21 @@ def run_watcher(home, seconds, extra_env=None):
         proc.terminate()
         out, _ = proc.communicate(timeout=10)
     return out
+
+
+# A scenario budget is wall-clock time granted to a daemon that never exits on its
+# own, so the harness runs it and then kills it. The original numbers were tuned
+# against a 2s poll interval and simply sum to ~195s, which is why the suite looked
+# like it hung. With SHOWKIT_POLL_SECONDS at 0.05 each poll is cheap enough that
+# every scenario finishes its work far inside its budget, so the budgets can be
+# scaled down for CI. SHOWKIT_TEST_SCALE=1 (the default) keeps local runs at the
+# original timings; CI uses a fraction. The 2s floor stops a scenario being killed
+# before it has had a chance to poll even once.
+SCALE = float(os.environ.get("SHOWKIT_TEST_SCALE", "1"))
+
+
+def T(seconds):
+    return max(2.0, seconds * SCALE)
 
 
 def logtext(home):
@@ -203,7 +224,7 @@ def scenario(fn):
 def s1_deck_reaches_all_gfx(home):
     set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
     (home / "Desktop" / "Ingest" / "show.pptx").write_bytes(b"x" * 4096)
-    run_watcher(home, 12)
+    run_watcher(home, T(12))
     txt = logtext(home)
     for h in ("GFX1", "GFX2", "GFX3"):
         check(f"OK logged for {h}", f"OK   [DECK] -> \\\\{h}" in txt, txt)
@@ -221,7 +242,7 @@ def s2_refused_put_is_retried_then_succeeds(home):
     # GFX1 refuses every put for this run; GFX2 and GFX3 accept
     set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {"GFX1": {"refuse_put": True}}})
     (home / "Desktop" / "Ingest" / "deck.pptx").write_bytes(b"y" * 2048)
-    run_watcher(home, 14)
+    run_watcher(home, T(14))
     txt = logtext(home)
     check("first attempt FAILs", "FAIL" in txt, txt)
     check("says it will retry", "retry in" in txt, txt)
@@ -238,7 +259,7 @@ def s3_absent_machine_skipped_then_given_up(home):
     set_control(home, {"up": [], "hosts": {}})
     (home / "Desktop" / "Ingest" / "clip.mov").write_bytes(b"z" * 1024)
     # compress the timing so the give-up path is reachable in a test
-    run_watcher(home, 26, extra_env={"SHOWKIT_MAX_SKIPS": "3", "SHOWKIT_SKIP_RETRY": "1",
+    run_watcher(home, T(26), extra_env={"SHOWKIT_MAX_SKIPS": "3", "SHOWKIT_SKIP_RETRY": "1",
                                      "SHOWKIT_BACKOFF": "0,1"})
     txt = logtext(home)
     check("SKIP logged", "SKIP [MEDIA]" in txt, txt)
@@ -259,7 +280,7 @@ def s3_absent_machine_skipped_then_given_up(home):
 def s4_size_mismatch_is_caught(home):
     set_control(home, {"up": ["GFX1"], "hosts": {"GFX1": {"corrupt_put": True}}})
     (home / "Desktop" / "Ingest" / "big.pptx").write_bytes(b"q" * 8192)
-    run_watcher(home, 10)
+    run_watcher(home, T(10))
     txt = logtext(home)
     check("SIZE MISMATCH detected", "SIZE MISMATCH" in txt, txt)
     check("no false OK", "OK   [DECK]" not in txt, txt)
@@ -299,7 +320,7 @@ def s6_pushes_run_in_parallel(home):
         "hosts": {h: {"delay": 2.0} for h in ("GFX1", "GFX2", "GFX3")},
     })
     (home / "Desktop" / "Ingest" / "slow.pptx").write_bytes(b"p" * 512)
-    run_watcher(home, 20)
+    run_watcher(home, T(20))
     puts = [c for c in calls(home) if c[2].startswith("put ") and "slow.pptx" in c[2]]
     check("three puts attempted", len(puts) == 3, str(len(puts)))
     if len(puts) == 3:
@@ -311,14 +332,14 @@ def s6_pushes_run_in_parallel(home):
 def s7_pending_survives_restart(home):
     set_control(home, {"up": [], "hosts": {}})
     (home / "Desktop" / "Ingest" / "wait.pptx").write_bytes(b"w" * 700)
-    run_watcher(home, 8)
+    run_watcher(home, T(8))
     q = json.loads((home / ".config" / "showkit" / "queue.json").read_text())
     check("queue file written", "wait.pptx" in q, json.dumps(q))
     check("not marked done while machine absent", not q["wait.pptx"].get("done"),
           json.dumps(q))
 
     set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
-    run_watcher(home, 12)
+    run_watcher(home, T(12))
     txt = logtext(home)
     check("carried-over file is picked up", "carried over from last run" in txt, txt)
     for h in ("GFX1", "GFX2", "GFX3"):
@@ -332,7 +353,7 @@ def s7_pending_survives_restart(home):
 def s8_unknown_extension_goes_everywhere(home):
     set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "MITTIA", "MITTIB"], "hosts": {}})
     (home / "Desktop" / "Ingest" / "notes.txt").write_bytes(b"n" * 100)
-    run_watcher(home, 12)
+    run_watcher(home, T(12))
     txt = logtext(home)
     check("logged as UNKNOWN EXT", "UNKNOWN EXT .txt -> ALL" in txt, txt)
     for h in ("GFX1", "GFX2", "GFX3", "MITTIA", "MITTIB"):
@@ -342,7 +363,7 @@ def s8_unknown_extension_goes_everywhere(home):
 @scenario
 def s9_missing_ingest_dir_is_recreated(home):
     shutil.rmtree(home / "Desktop" / "Ingest")
-    out = run_watcher(home, 6)
+    out = run_watcher(home, T(6))
     check("no crash when Ingest folder is missing", "Traceback" not in out, out[-500:])
     check("Ingest folder recreated", (home / "Desktop" / "Ingest").exists())
 
@@ -359,7 +380,7 @@ def s10_day_folders_are_inert(home):
     (drop / "top.pptx").write_bytes(b"t" * 500)
     (drop / "Day 1" / "sorted.pptx").write_bytes(b"s" * 500)
     (drop / "Day 3" / "clip.mov").write_bytes(b"m" * 500)
-    run_watcher(home, 12)
+    run_watcher(home, T(12))
     txt = logtext(home)
     check("top-level file is pushed", "QUEUED top.pptx" in txt, txt)
     check("Day folder decks are not re-pushed", "sorted.pptx" not in txt, txt)
@@ -376,7 +397,7 @@ def s11_log_rotates(home):
     with (drop / "push_log.txt").open("w") as f:
         f.write("x" * (5 * 1024 * 1024 + 10))
     (drop / "deck.pptx").write_bytes(b"d" * 100)
-    run_watcher(home, 12)
+    run_watcher(home, T(12))
     check("log kept under the threshold",
           (drop / "push_log.txt").stat().st_size < 5 * 1024 * 1024,
           str((drop / "push_log.txt").stat().st_size))
@@ -399,7 +420,7 @@ def s13_given_up_file_rearms_when_recopied(home):
     drop.mkdir(parents=True, exist_ok=True)
     f = drop / "stuck.pptx"
     f.write_bytes(b"s" * 4096)
-    run_watcher(home, 25, extra_env=fast)
+    run_watcher(home, T(25), extra_env=fast)
     txt = logtext(home)
     check("gives up after exhausting attempts", "GIVE UP stuck.pptx" in txt, txt[-700:])
     check("says how to retry", "re-copy" in txt, txt[-400:])
@@ -417,7 +438,7 @@ def s13_given_up_file_rearms_when_recopied(home):
     set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
     os.utime(f, None)                      # mtime moves => operator re-copied it
     before = len(calls(home))
-    run_watcher(home, 14, extra_env=fast)
+    run_watcher(home, T(14), extra_env=fast)
     txt = logtext(home)
     check("re-arms a re-copied file", "RE-ARMED stuck.pptx" in txt, txt[-500:])
     check("re-armed file is delivered again",
@@ -431,7 +452,7 @@ def s12_queue_survives_corruption(home):
     q = home / ".config" / "showkit" / "queue.json"
     q.write_text("{ this is not json")
     (home / "Desktop" / "Ingest" / "deck.pptx").write_bytes(b"p" * 300)
-    out = run_watcher(home, 12)
+    out = run_watcher(home, T(12))
     check("does not crash on a corrupt queue", "Traceback" not in out, out[-600:])
     check("rewrites the queue", q.exists() and "deck.pptx" in q.read_text(), q.read_text()[:200])
     check("still delivers", "OK   [DECK] -> \\\\GFX1" in logtext(home), logtext(home))

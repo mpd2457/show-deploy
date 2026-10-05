@@ -47,6 +47,27 @@ python3 test_watcher.py        # 58 checks
 python3 test_watcher_win.py    # 48 checks, needs pwsh
 ```
 
+### Running the tests faster
+
+The watcher is a daemon that never exits on its own, so each scenario runs it for a
+fixed wall-clock budget and then stops it. Those budgets add up to about three and a
+half minutes, which is fine but slow to sit through while iterating.
+
+Both knobs below make the suite quicker without weakening it. The default behaviour is
+unchanged, so a plain `python3 test_watcher.py` still runs at the original timings.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `SHOWKIT_TEST_SCALE` | `1` | Scales the per-scenario budgets. `0.2` runs the suite in about 50s and is what CI uses. Verified stable across repeated runs; `0.1` starts failing scenarios, so don't go lower without expecting flakes. |
+| `SHOWKIT_POLL_SECONDS` | `2` | The watcher's filesystem poll interval. The harness sets this to `0.05` so each poll is cheap. It is a real knob on the watcher itself, not just a test setting — the retry-backoff has one too, via `SHOWKIT_BACKOFF`. |
+
+```bash
+SHOWKIT_TEST_SCALE=0.2 python3 test_watcher.py   # ~50s instead of ~3m30s
+```
+
+The same two seams exist in the PowerShell watcher (`show-watcher.ps1`) for the
+Windows harness.
+
 ## Network, wired only
 
 192.168.50.0/24, gateway 192.168.50.1. Wi-Fi is never changed.

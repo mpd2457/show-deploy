@@ -1,0 +1,45 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  # The offline harness fakes ping/smbclient, so this needs no rig and no network.
+  # SHOWKIT_TEST_SCALE shrinks the per-scenario wall-clock budgets (they are fixed
+  # because the watcher is a daemon that never exits on its own). 0.2 is verified
+  # stable across repeated runs; 0.1 starts failing scenarios.
+  offline-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile Python
+        run: python -m py_compile show-watcher.py show-dashboard.py test_watcher.py
+      - name: Bash syntax check
+        run: |
+          for f in *.sh; do bash -n "$f" || exit 1; done
+      - name: Offline watcher harness
+        env:
+          SHOWKIT_TEST_SCALE: "0.2"
+        run: python -u test_watcher.py
+
+  # The PowerShell watcher and its harness are only exercisable on Windows.
+  # Separately, test_watcher_win.py still uses un-scaled hardcoded budgets
+  # summing to ~10 minutes, so it is deliberately not run here yet.
+  windows-harness:
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Parse PowerShell watcher
+        shell: pwsh
+        run: |
+          $errs = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            "$PWD\show-watcher.ps1", [ref]$null, [ref]$errs)
+          if ($errs) { $errs | ForEach-Object { Write-Error $_.Message }; exit 1 }
+          Write-Host "show-watcher.ps1 parses clean"

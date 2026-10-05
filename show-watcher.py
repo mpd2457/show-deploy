@@ -52,7 +52,19 @@ def _env_num(name, default):
         return default
 
 
-POLL_SECONDS = 2
+def _env_float(name, default):
+    # Separate from _env_num because the poll interval is legitimately
+    # fractional. int() on "0.05" raises ValueError, which _env_num swallows,
+    # so asking for a sub-second poll through _env_num silently got you the
+    # default instead.
+    try:
+        v = float(os.environ[name])
+    except (KeyError, ValueError):
+        return default
+    return v if v > 0 else default
+
+
+POLL_SECONDS = _env_float("SHOWKIT_POLL_SECONDS", 2)
 SETTLE_POLLS = 3           # consecutive identical size+mtime samples before a push
 MAX_ATTEMPTS = 8
 BACKOFF = [
