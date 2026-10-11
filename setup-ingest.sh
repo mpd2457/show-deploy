@@ -234,18 +234,13 @@ if [ "$CONFIG_CLOUD" = "y" ] || [ "$CONFIG_CLOUD" = "yes" ]; then
             touch "$RCLONE_CONF_PATH"
             chmod 600 "$RCLONE_CONF_PATH"
         fi
-        echo "Configure remotes (e.g., od-producer, gd-producer). Type 'done' when finished."
-        while true; do
-            read -r -p "Add remote? [name or done]: " REMOTE_NAME
-            if [ -z "$REMOTE_NAME" ]; then
-                continue
-            fi
-            rnl=$(echo "$REMOTE_NAME" | tr '[:upper:]' '[:lower:]')
-            if [ "$rnl" = "done" ]; then
-                break
-            fi
-            sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$UID_" rclone config create "$REMOTE_NAME" auto config_is_local false 2>&1 || true
-        done
+        echo
+        echo "Launching interactive rclone config."
+        echo "Create a remote (recommended name: gd or content)."
+        echo "For Google Drive choose type 'drive'. For OneDrive choose 'onedrive'."
+        echo "When finished, quit rclone config (q)."
+        echo
+        sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$UID_" RCLONE_CONFIG="$RCLONE_CONF_PATH" rclone config || true
         CLOUD_SYNC_SCRIPT="$USER_HOME/.local/bin/show-cloudsync.sh"
         cat > "$CLOUD_SYNC_SCRIPT" <<'EOS'
 #!/bin/bash
