@@ -11,16 +11,12 @@ macOS or Windows.
 
 ## Get the kit
 
-No cloud account, no OAuth, no extra install. Download the zip, unzip it, copy
-the folder onto an exFAT USB stick, and run the setup file on each machine.
+No cloud account, no OAuth, no extra install.
 
-1. Download: https://github.com/mpd2457/show-deploy/archive/refs/heads/main.zip
-2. Unzip. You get a folder named `show-deploy-main` — rename it `show-deploy` if you like.
+1. Download: https://github.com/mpd2457/show-deploy/releases/latest/download/show-deploy.zip
+2. Unzip. You get a folder named `show-deploy`.
 3. Copy that folder onto an exFAT USB stick (Windows and Mac both read exFAT natively).
 4. Plug the stick into each machine and double-click the setup file for that machine.
-
-A packaged zip that unzips to a folder named `show-deploy` is on
-[Releases](https://github.com/mpd2457/show-deploy/releases).
 
 Or clone:
 
