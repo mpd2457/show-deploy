@@ -15,35 +15,36 @@ DROP_DIR="$USER_HOME/Desktop/Ingest"
 ARCHIVE_DIR="$USER_HOME/Desktop/Archive"
 CONF_DIR="$USER_HOME/.config/showkit"
 WATCHER="$USER_HOME/.local/bin/show-watcher.py"
+DASHBOARD="$USER_HOME/.local/bin/show-dashboard.py"
 UNIT_DIR="$USER_HOME/.config/systemd/user"
 SERVICE="showwatcher"
+DASHBOARD_SERVICE="showdashboard"
 UID_="$(id -u "$SUDO_USER")"
 asuser() { sudo -u "$SUDO_USER" XDG_RUNTIME_DIR="/run/user/$UID_" "$@"; }
 echo "=== Ingest restore starting (user: $SUDO_USER) ==="
 
-# 1. Watcher service
-if [ -f "$UNIT_DIR/$SERVICE.service" ]; then
-    asuser systemctl --user disable --now "$SERVICE.service" 2>/dev/null || true
-    rm -f "$UNIT_DIR/$SERVICE.service"
-    asuser systemctl --user daemon-reload 2>/dev/null || true
-    asuser systemctl --user reset-failed 2>/dev/null || true
-    echo "Removed $SERVICE service"
-else
-    echo "$SERVICE service not present"
-fi
-rm -f "$WATCHER" && echo "Removed watcher script"
+stop_unit() {
+    local name="$1"
+    asuser systemctl --user disable --now "$name.service" 2>/dev/null || true
+    asuser systemctl --user disable --now "$name.timer" 2>/dev/null || true
+    rm -f "$UNIT_DIR/$name.service" "$UNIT_DIR/$name.timer"
+    asuser systemctl --user reset-failed "$name.service" 2>/dev/null || true
+}
+
+# 1. Watcher + dashboard (everything setup-ingest.sh enabled)
+stop_unit "$SERVICE"
+stop_unit "$DASHBOARD_SERVICE"
+# leftover units from older kit versions that had a cloud inbox
+stop_unit showcloudsync
+rm -f "$WATCHER" "$DASHBOARD" \
+    "$USER_HOME/.local/bin/show-cloudsync.sh" \
+    "$USER_HOME/.local/bin/show-cloudsync.py"
+asuser systemctl --user daemon-reload 2>/dev/null || true
+echo "Removed watcher and dashboard"
 # linger is left as-is: other user services on this box depend on it.
 
 # 2. Credentials and the push queue (queue.json lives in the same folder)
 if [ -d "$CONF_DIR" ]; then rm -rf "$CONF_DIR"; echo "Removed SMB credentials and push queue ($CONF_DIR)"; fi
-# Remove cloud sync timer and rclone config if present (wiped per spec)
-rm -f "$UNIT_DIR/showcloudsync.service" "$UNIT_DIR/showcloudsync.timer" 2>/dev/null || true
-rm -rf "$USER_HOME/.config/systemd/user/timers.target.wants/showcloudsync.timer" 2>/dev/null || true
-asuser systemctl --user daemon-reload 2>/dev/null || true
-asuser systemctl --user reset-failed showcloudsync 2>/dev/null || true
-asuser systemctl --user stop showcloudsync.timer 2>/dev/null || true
-asuser systemctl --user stop showcloudsync.service 2>/dev/null || true
-echo "Removed cloud sync timer/config references (if any)"
 
 # 3. Wired static IP -> back to normal DHCP
 if command -v nmcli >/dev/null && systemctl is-active --quiet NetworkManager; then
@@ -81,7 +82,7 @@ if [ "$PURGE" -eq 1 ]; then
     rm -rf "$DROP_DIR" "$ARCHIVE_DIR" "$USER_HOME/Desktop/Ingest-cloud" 2>/dev/null || true
     echo "Deleted $DROP_DIR and $ARCHIVE_DIR"
 else
-    for d in "$DROP_DIR" "$ARCHIVE_DIR" "$USER_HOME/Desktop/Ingest-cloud"; do
+    for d in "$DROP_DIR" "$ARCHIVE_DIR"; do
         [ -d "$d" ] && echo "Kept $d ($(find "$d" -type f | wc -l) files) - rerun with --purge to delete"
     done
     echo "Read the push log before you delete it: $DROP_DIR/push_log.txt"

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # install-desktop-launcher.sh
-# Copies show-deploy.desktop to ~/Desktop and marks it trusted.
+# Copies show-deploy.desktop to ~/Desktop with THIS folder's path baked in,
+# then marks it trusted so GNOME will launch it.
 # Usage: bash install-desktop-launcher.sh
 
 set -euo pipefail
@@ -9,22 +10,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_SRC="$SCRIPT_DIR/show-deploy.desktop"
 DESKTOP_DEST="$HOME/Desktop/show-deploy.desktop"
 
-# ── 1. Copy the launcher ──────────────────────────────────────────────────────
-echo "Copying launcher to Desktop..."
-cp "$DESKTOP_SRC" "$DESKTOP_DEST"
+[ -f "$DESKTOP_SRC" ] || { echo "missing $DESKTOP_SRC"; exit 1; }
 
-# ── 2. Make it executable ─────────────────────────────────────────────────────
+echo "Installing launcher on Desktop..."
+# The committed .desktop has a placeholder path. Replace it with the folder
+# this script actually lives in, so a copy on a USB stick still works.
+sed "s|/home/miked/Desktop/show-deploy|$SCRIPT_DIR|g" "$DESKTOP_SRC" > "$DESKTOP_DEST"
 chmod +x "$DESKTOP_DEST"
-echo "  chmod +x done."
 
-# ── 3. Mark as trusted (GNOME / Nautilus) ─────────────────────────────────────
 if command -v gio >/dev/null 2>&1; then
     gio set "$DESKTOP_DEST" metadata::trusted true
-    echo "  Marked trusted via gio."
-else
-    echo "  (gio not found — skipping trusted flag; right-click → Allow Launching if needed)"
+    echo "  marked trusted via gio"
 fi
 
-# ── 4. Done ───────────────────────────────────────────────────────────────────
-echo ""
-echo "Launcher installed on Desktop — double-click Show Deploy Setup to run"
+echo "Launcher: $DESKTOP_DEST"
+echo "Double-click Show Deploy Setup (needs your sudo password)."

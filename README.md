@@ -9,11 +9,28 @@ the Macs. Transfers retry, every file is verified by size on arrival, and machin
 that are off are skipped rather than failed. Nothing auto-opens. Runs on Linux,
 macOS or Windows.
 
-Stick must be exFAT. Copy this whole folder onto it.
+## Get the kit
 
-**Two Ingest options.** The Linux laptop (mkultra2) is the normal one. A Windows 11
-Pro work laptop can take the same role with identical behaviour if mkultra2 is not
-available — see [Windows Ingest](#windows-ingest-fallback).
+No cloud account, no OAuth, no extra install. Download the zip, unzip it, copy
+the folder onto an exFAT USB stick, and run the setup file on each machine.
+
+1. Download: https://github.com/mpd2457/show-deploy/archive/refs/heads/main.zip
+2. Unzip. You get a folder named `show-deploy-main` — rename it `show-deploy` if you like.
+3. Copy that folder onto an exFAT USB stick (Windows and Mac both read exFAT natively).
+4. Plug the stick into each machine and double-click the setup file for that machine.
+
+A packaged zip that unzips to a folder named `show-deploy` is on
+[Releases](https://github.com/mpd2457/show-deploy/releases).
+
+Or clone:
+
+```bash
+git clone https://github.com/mpd2457/show-deploy.git
+```
+
+**Two Ingest options.** The Linux laptop is the normal one. A Windows 11
+Pro work laptop can take the same role with identical behaviour if the Linux
+machine is not available — see [Windows Ingest](#windows-ingest-fallback).
 
 > **Running a show, not setting one up?** Read [CREW-GUIDE.md](CREW-GUIDE.md) instead.
 > It covers dropping files in, the one naming rule that matters, and what to do when
@@ -461,9 +478,3 @@ at logon. Neither starts on its own if the machine is off — obviously.
 - **Desktop launcher** (`show-deploy.desktop`) — double-click to run
   `setup-ingest.sh` without opening a terminal manually.
   Install with `bash install-desktop-launcher.sh`.
-- **Cloud inbox sync (OneDrive + Google Drive)** — `setup-ingest.sh` now
-  optionally configures rclone to pull files from a cloud folder into
-  `~/Desktop/Ingest-cloud` every 30 seconds. Files there are pushed to the rig
-  automatically (tagged `CLOUD:ingest` in the log). Tokens are wiped by
-  `restore-ingest.sh`. See the cloud sync section in `setup-ingest.sh` for
-  details on the rclone OAuth flow.
