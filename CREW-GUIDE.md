@@ -36,11 +36,11 @@ You don't choose. The kit works it out from the file type.
 
 | If the file is... | It goes to... |
 |---|---|
-| A slide deck or PDF (`.pptx`, `.ppt`, `.key`, `.pdf`) | The three **GFX** machines |
+| A slide deck or PDF (`.pptx`, `.ppt`, `.key`, `.pdf`) | The six **GFX** machines |
 | Video or audio (`.mp4`, `.mov`, `.mxf`, `.avi`, `.mkv`, `.wav`, `.mp3`, `.aac`, `.m4a`) | The two **Mitti** machines |
 | Anything else | All of them |
 
-So a new slide deck just goes in Ingest — it'll turn up on all three GFX machines on its own. You don't need to copy it anywhere by hand.
+So a new slide deck just goes in Ingest — it'll turn up on all six GFX machines on its own. You don't need to copy it anywhere by hand.
 
 ---
 
@@ -123,10 +123,10 @@ If it's still not there after a couple of minutes:
 You might be asked for the password for the show machines. It is:
 
 ```
-showrig
+password
 ```
 
-The same on all three GFX machines, and the same as the Mac logins. If whoever set up the kit chose something else, ask them rather than guessing — a wrong password makes every push fail and the log will say so.
+The same on all six GFX machines and both Macs (the account is called `show`). If whoever set up the kit chose something else, ask them rather than guessing — a wrong password makes every push fail and the log will say so.
 
 ---
 
@@ -152,14 +152,17 @@ In a genuine emergency, the log is the fastest way to a straight answer. Screens
 got there, ignore this section entirely — everything above it is the same all
 show long.
 
-Six machines, each started a slightly different way, because Windows, Mac and
+Nine machines, each started a slightly different way, because Windows, Mac and
 Linux each put up their own kind of roadblock.
 
 | Which machine | What to click | Then |
 |---|---|---|
-| **GFX1** (first of the three big laptops) | Double-click `RUN-gfx1.bat` | Click **Yes** when it asks |
+| **GFX1** (first of the six big laptops) | Double-click `RUN-gfx1.bat` | Click **Yes** when it asks |
 | **GFX2** (second) | Double-click `RUN-gfx2.bat` | Click **Yes** when it asks |
 | **GFX3** (third) | Double-click `RUN-gfx3.bat` | Click **Yes** when it asks |
+| **GFX4** (fourth) | Double-click `RUN-gfx4.bat` | Click **Yes** when it asks |
+| **GFX5** (fifth) | Double-click `RUN-gfx5.bat` | Click **Yes** when it asks |
+| **GFX6** (sixth) | Double-click `RUN-gfx6.bat` | Click **Yes** when it asks |
 | **MITTIA** (first Mac) | Right-click `RUN-mittiA.command` → **Open** | Confirm it |
 | **MITTIB** (second Mac) | Right-click `RUN-mittiB.command` → **Open** | Confirm it |
 | **INGEST** (the Ingest laptop) | See below | Type your login password |
@@ -187,18 +190,20 @@ password. It's the same password you use to log into that machine normally.
 
 On the Mac setup, the first prompt is also for **your own Mac login password**,
 again to allow the setup to run as an administrator. The *show* password comes
-later, and you can just press Enter at that one.
+later, and you can just press Enter at that one. At the end it prints two
+`PASS` lines — if you see `FAIL`, don't move on: follow the System Settings
+steps it prints, or ask whoever set up the kit.
 
 ### When it asks for the show password
 
-Just **press Enter**. The password is `showrig` and it works on all six machines,
+Just **press Enter**. The password is `password` and it works on all nine machines,
 so there's nothing to remember and nothing to type. If you'd rather set your own,
 type it instead — but then you have to type that same one on every machine, or
 the file transfers will fail.
 
 ### Order
 
-Do the five far-end machines first, and **Ingest last**. Ingest is the one that
+Do the eight far-end machines first, and **Ingest last**. Ingest is the one that
 holds the passwords, and it needs the other machines to already exist before it
 can store them.
 

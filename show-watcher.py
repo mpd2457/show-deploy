@@ -36,7 +36,7 @@ DROP = HOME / "Desktop" / "Ingest"
 ARCHIVE = HOME / "Desktop" / "Archive"
 LOG = DROP / "push_log.txt"
 
-GFX_TARGETS = ["GFX1", "GFX2", "GFX3"]
+GFX_TARGETS = ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"]
 MITTI_TARGETS = ["MITTIA", "MITTIB"]
 
 DECK_EXTENSIONS = {".pptx", ".ppt", ".key", ".pdf"}

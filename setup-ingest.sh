@@ -46,10 +46,10 @@ ask() {
 SMB_USER="show"
 ask "GFX share username" SMB_USER "show"
 # The password is prompted for rather than hardcoded, but a default is offered so
-# load-in is not six machines x an invented password. Enter accepts it; type to
+# load-in is not nine machines x an invented password. Enter accepts it; type to
 # override. See the README section "The share password" for what this does and
 # does not protect against.
-DEFAULT_SMB_PASS="showrig"
+DEFAULT_SMB_PASS="password"
 while true; do
     read -r -s -p "GFX share password for '$SMB_USER' (Enter = $DEFAULT_SMB_PASS): " SMB_PASS
     echo
@@ -63,14 +63,18 @@ fi
 MITTI_USER=""
 MITTI_PASS=""
 if [ -t 0 ]; then
-    ask "Mac share username (blank if no Macs on this show)" MITTI_USER
+    read -r -p "Push media to the Mitti Macs this show? [Y/n]: " USE_MACS
+    case "${USE_MACS:-y}" in
+        [Nn]*) echo "No Macs: media files will be skipped." ;;
+        *) ask "Mac share username" MITTI_USER "show" ;;
+    esac
 else
     echo "No TTY: skipping Mac credentials. Re-run interactively to set them."
 fi
 if [ -n "$MITTI_USER" ]; then
-    # Same default as the GFX password. It must match whatever you set on the
-    # Mac itself in setup-mitti.sh, or media pushes will fail.
-    read -r -s -p "Mac login password for '$MITTI_USER' (Enter = $DEFAULT_SMB_PASS): " MITTI_PASS
+    # Same account and default password as GFX - setup-mitti.sh creates the
+    # `show` user on each Mac. It must match, or media pushes will fail.
+    read -r -s -p "Mac share password for '$MITTI_USER' (Enter = $DEFAULT_SMB_PASS): " MITTI_PASS
     echo
     [ -n "$MITTI_PASS" ] || MITTI_PASS="$DEFAULT_SMB_PASS"
 fi
@@ -129,8 +133,11 @@ cat >> /etc/hosts <<'EOF'
 192.168.50.11	GFX1
 192.168.50.12	GFX2
 192.168.50.13	GFX3
-192.168.50.15	MITTIA
-192.168.50.16	MITTIB
+192.168.50.14	GFX4
+192.168.50.15	GFX5
+192.168.50.16	GFX6
+192.168.50.21	MITTIA
+192.168.50.22	MITTIB
 # END SHOWNET
 EOF
 

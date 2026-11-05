@@ -5,7 +5,7 @@
 #>
     param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("GFX1", "GFX2", "GFX3")]
+    [ValidateSet("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6")]
     [string]$MachineName,
     [string]$Gateway       = "192.168.50.1",
     [int]   $PrefixLength  = 24,
@@ -14,9 +14,9 @@
     [string]$SharePassword = ""
 )
 $ErrorActionPreference = "Stop"
-# Prompted for rather than baked in, with a default so load-in is not six
+# Prompted for rather than baked in, with a default so load-in is not nine
 # machines x an invented password. Enter accepts it; type to override.
-$DefaultSharePassword = "showrig"
+$DefaultSharePassword = "password"
 if ([string]::IsNullOrWhiteSpace($SharePassword)) {
     $secureInput = Read-Host "Share password for local account '$ShareUser' (Enter = $DefaultSharePassword)" -AsSecureString
     $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureInput)
@@ -33,8 +33,11 @@ $hostsMap = [ordered]@{
     "GFX1"     = "192.168.50.11"
     "GFX2"     = "192.168.50.12"
     "GFX3"     = "192.168.50.13"
-    "MITTIA"   = "192.168.50.15"
-    "MITTIB"   = "192.168.50.16"
+    "GFX4"     = "192.168.50.14"
+    "GFX5"     = "192.168.50.15"
+    "GFX6"     = "192.168.50.16"
+    "MITTIA"   = "192.168.50.21"
+    "MITTIB"   = "192.168.50.22"
 }
 $StaticIP = $hostsMap[$MachineName]
 $ingestDir = "C:\Users\Public\Desktop\Ingest"

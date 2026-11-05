@@ -200,24 +200,24 @@ def scenario(fn):
 
 @scenario
 def s1_deck_reaches_all_gfx(home):
-    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"], "hosts": {}})
     d = home / "profile" / "Desktop" / "Ingest"
     d.mkdir(parents=True, exist_ok=True)
     (d / "show.pptx").write_bytes(b"x" * 4096)
     out = run_watcher(home, 40)
     txt = logtext(home)
-    for h in ("GFX1", "GFX2", "GFX3"):
+    for h in ("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"):
         check(f"OK logged for {h}", f"OK   [DECK] -> \\\\{h}" in txt, txt or out[-800:])
     check("archived", (home / "profile" / "Desktop" / "Archive" / "show.pptx").exists())
-    check("all three hold 4096 bytes",
-          all(store(home, h).get("show.pptx") == 4096 for h in ("GFX1", "GFX2", "GFX3")),
-          json.dumps({h: store(home, h) for h in ("GFX1", "GFX2", "GFX3")}))
+    check("all six hold 4096 bytes",
+          all(store(home, h).get("show.pptx") == 4096 for h in ("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6")),
+          json.dumps({h: store(home, h) for h in ("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6")}))
     check("media hosts untouched", "MITTIA" not in txt, txt)
 
 
 @scenario
 def s2_refused_put_is_retried(home):
-    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {"GFX1": {"refuse_put": True}}})
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"], "hosts": {"GFX1": {"refuse_put": True}}})
     d = home / "profile" / "Desktop" / "Ingest"
     d.mkdir(parents=True, exist_ok=True)
     (d / "deck.pptx").write_bytes(b"y" * 2048)
@@ -262,7 +262,7 @@ def s4_size_mismatch_is_caught(home):
 
 @scenario
 def s5_in_progress_copy_not_pushed(home):
-    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"], "hosts": {}})
     d = home / "profile" / "Desktop" / "Ingest"
     d.mkdir(parents=True, exist_ok=True)
     partial = d / "growing.pptx"
@@ -295,15 +295,15 @@ def s5_in_progress_copy_not_pushed(home):
 
 @scenario
 def s6_pushes_run_in_parallel(home):
-    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"],
-                       "hosts": {h: {"delay": 3.0} for h in ("GFX1", "GFX2", "GFX3")}})
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"],
+                       "hosts": {h: {"delay": 3.0} for h in ("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6")}})
     d = home / "profile" / "Desktop" / "Ingest"
     d.mkdir(parents=True, exist_ok=True)
     (d / "slow.pptx").write_bytes(b"p" * 512)
     run_watcher(home, 75)
     puts = [c for c in calls(home) if c[2].startswith("put ") and "slow.pptx" in c[2]]
-    check("three puts attempted", len(puts) == 3, str(len(puts)))
-    if len(puts) == 3:
+    check("six puts attempted", len(puts) == 6, str(len(puts)))
+    if len(puts) == 6:
         span = max(c[0] for c in puts) - min(c[0] for c in puts)
         check("puts overlapped rather than serialised (span < 6s)", span < 6.0, f"span={span:.2f}s")
 
@@ -319,12 +319,12 @@ def s7_pending_survives_restart(home):
     check("queue file written", "wait.pptx" in queue(home), json.dumps(list(queue(home))))
     check("not marked done while machine absent", not e.get("done"), json.dumps(e))
 
-    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"], "hosts": {}})
     out = run_watcher(home, 45)
     txt = logtext(home)
     check("carried-over file is picked up", "carried over from last run" in txt,
           txt or out[-800:])
-    for h in ("GFX1", "GFX2", "GFX3"):
+    for h in ("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"):
         check(f"delivered to {h} after restart", f"OK   [DECK] -> \\\\{h}" in txt, txt)
     check("not re-queued from scratch", txt.count("QUEUED wait.pptx") == 1,
           str(txt.count("QUEUED wait.pptx")))
@@ -332,14 +332,14 @@ def s7_pending_survives_restart(home):
 
 @scenario
 def s8_unknown_extension_goes_everywhere(home):
-    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "MITTIA", "MITTIB"], "hosts": {}})
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6", "MITTIA", "MITTIB"], "hosts": {}})
     d = home / "profile" / "Desktop" / "Ingest"
     d.mkdir(parents=True, exist_ok=True)
     (d / "notes.txt").write_bytes(b"n" * 100)
     out = run_watcher(home, 60)
     txt = logtext(home)
     check("logged as UNKNOWN EXT", "UNKNOWN EXT .txt -> ALL" in txt, txt or out[-800:])
-    for h in ("GFX1", "GFX2", "GFX3", "MITTIA", "MITTIB"):
+    for h in ("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6", "MITTIA", "MITTIB"):
         check(f"unknown ext reached {h}", f"-> \\\\{h}" in txt, txt)
 
 
@@ -353,7 +353,7 @@ def s9_missing_ingest_dir_is_recreated(home):
 
 @scenario
 def s10_day_folders_are_inert(home):
-    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "MITTIA", "MITTIB"], "hosts": {}})
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6", "MITTIA", "MITTIB"], "hosts": {}})
     drop = home / "profile" / "Desktop" / "Ingest"
     drop.mkdir(parents=True, exist_ok=True)
     for d in ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5"]:
@@ -372,8 +372,8 @@ def s10_day_folders_are_inert(home):
 def s12_given_up_file_rearms_when_recopied(home):
     """Port of the Python s13: a GIVE UP file must not spin, and must re-arm once
     its mtime moves. Both watchers share this behaviour, so both are held to it."""
-    # all three GFX up so the file can settle; GFX1 refuses every put
-    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {"GFX1": {"refuse_put": True}}})
+    # all six GFX up so the file can settle; GFX1 refuses every put
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"], "hosts": {"GFX1": {"refuse_put": True}}})
     d = home / "profile" / "Desktop" / "Ingest"
     d.mkdir(parents=True, exist_ok=True)
     f = d / "stuck.pptx"
@@ -392,7 +392,7 @@ def s12_given_up_file_rearms_when_recopied(home):
     check("records the timestamp it gave up at", "gave_up_mtime" in entry, json.dumps(entry)[:300])
     check("marked done so it is not picked up again", entry.get("done") is True, json.dumps(entry)[:300])
 
-    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"], "hosts": {}})
     # re-copy the file: a fresh mtime is the operator saying "try that again"
     f.write_bytes(b"s" * 4096)
     os.utime(f, None)
@@ -405,7 +405,7 @@ def s12_given_up_file_rearms_when_recopied(home):
 
 @scenario
 def s11_queue_survives_corruption(home):
-    set_control(home, {"up": ["GFX1", "GFX2", "GFX3"], "hosts": {}})
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"], "hosts": {}})
     d = home / "profile" / "Desktop" / "Ingest"
     d.mkdir(parents=True, exist_ok=True)
     q = home / "profile" / "AppData" / "Local" / "showkit" / "queue.json"

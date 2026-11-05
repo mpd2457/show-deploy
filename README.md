@@ -1,7 +1,7 @@
 # Show Deployment Kit
 
 Push PowerPoint decks and video clips from one Ingest laptop to the show rig over
-SMB, and nothing else. The rig is three graphics machines and two Macs running
+SMB, and nothing else. The rig is six graphics machines and two Macs running
 Mitti, all hard-wired to a private switch.
 
 Drop a deck in a folder and it lands on the GFX machines. Drop media and it lands on
@@ -48,10 +48,12 @@ machine is not available — see [Windows Ingest](#windows-ingest-fallback).
 | `show-status.sh` | Linux Ingest | quick human-readable status summary in the terminal |
 | `show-deploy.desktop` / `RUN-ingest.desktop` | Linux Ingest | double-click launcher for setup-ingest.sh |
 | `install-desktop-launcher.sh` | Linux Ingest | puts the launcher on the Desktop |
-| `setup-gfx.ps1` | GFX1-3 | Windows deck machines: IP, share, arrival log |
-| `RUN-gfx1.bat` … `RUN-gfx3.bat` | GFX1-3 | one per machine, so you cannot run the wrong one |
-| `setup-mitti.sh` | MITTIA/B | Mac video/audio: IP, share, arrival log |
+| `setup-gfx.ps1` | GFX1-6 | Windows deck machines: IP, share, arrival log |
+| `RUN-gfx1.bat` … `RUN-gfx6.bat` | GFX1-6 | one per machine, so you cannot run the wrong one |
+| `setup-mitti.sh` | MITTIA/B | Mac video/audio: IP, `show` account, SMB share, arrival log, self-test |
+| `restore-mitti.sh` | MITTIA/B | undoes it: old name, old addressing, share and account gone |
 | `RUN-mittiA.command` / `RUN-mittiB.command` | MITTIA/B | one per machine |
+| `RUN-restore-mitti.command` | MITTIA/B | double-click wrapper for `restore-mitti.sh` |
 | `show-watcher-mac.sh` | MITTIA/B | the Mac arrival logger |
 | `test_watcher.py` | any | offline tests for the Linux watcher |
 | `test_watcher_win.py` | any | offline tests for the Windows watcher |
@@ -61,8 +63,8 @@ Tests need no rig and touch nothing on it: they fake `ping` and `smbclient` in a
 temp directory and run the real watcher against them.
 
 ```bash
-python3 test_watcher.py        # 58 checks
-python3 test_watcher_win.py    # 48 checks, needs pwsh
+python3 test_watcher.py        # 67 checks
+python3 test_watcher_win.py    # needs pwsh
 ```
 
 ### Running the tests faster
@@ -95,8 +97,11 @@ INGEST  192.168.50.10   drop files in ~/Desktop/Ingest (mkultra2, or the Windows
 GFX1    192.168.50.11   decks
 GFX2    192.168.50.12   decks
 GFX3    192.168.50.13   decks
-MITTIA  192.168.50.15   video/audio
-MITTIB  192.168.50.16   video/audio
+GFX4    192.168.50.14   decks
+GFX5    192.168.50.15   decks
+GFX6    192.168.50.16   decks
+MITTIA  192.168.50.21   video/audio
+MITTIB  192.168.50.22   video/audio
 
 ## Folders
 
@@ -112,21 +117,23 @@ Files land straight in Ingest. Day folders stay empty until you drag into them.
 Decks go to the GFX machines, media to the Mitti Macs, anything else to
 everything — see [What gets pushed where](#what-gets-pushed-where).
 
-Log in as the share user `show`. The password is asked for at setup, not stored
-in this repo. Ingest writes it to `~/.config/showkit/smbcreds` at mode 600 (on
-Windows, to `%LOCALAPPDATA%\showkit` with an ACL for your user only). The Macs
-use each Mac's own login, stored the same way in `smbcreds-mitti`.
+Every machine — GFX and Mac alike — serves the share to a local account called
+`show`. The password is asked for at setup, not stored in this repo. Ingest
+writes it to `~/.config/showkit/smbcreds` at mode 600 (on Windows, to
+`%LOCALAPPDATA%\showkit` with an ACL for your user only), and the Mac copy to
+`smbcreds-mitti`. `setup-mitti.sh` creates the `show` account on each Mac itself
+(hidden, no login shell) so the Mac's real login is never touched.
 
 ### The share password
 
-The default is **`showrig`**. Press Enter at every prompt to accept it, or type
-something else at any of them. One password across all six machines means load-in
-is not six invented passwords.
+The default is **`password`**. Press Enter at every prompt to accept it, or type
+something else at any of them. One password across all nine machines means load-in
+is not nine invented passwords.
 
 Worth being clear about what it is for. The rig is a closed `192.168.50.0/24`
 wired network with no route to the internet, so this password is not protecting
 anything from the internet — it stops a random laptop on the switch from
-overwriting the decks mid-show. For that, `showrig` is fine, and it rotates by
+overwriting the decks mid-show. For that, `password` is fine, and it rotates by
 accident because the warehouse reimages every machine between events.
 
 Set something stronger if the machines ever see an untrusted network, or if you
@@ -155,7 +162,7 @@ outcomes can be trusted.
 
 **The warehouse reimages the rig between events, so every machine arrives at a
 show pristine.** Nothing carries over: no static IP, no share, no local
-account, no watcher, no stored credentials. All six machines need their setup
+account, no watcher, no stored credentials. All nine machines need their setup
 script run at load-in, every time. This is the normal workflow, not a
 recovery path.
 
@@ -166,7 +173,7 @@ Cable to the switch first.
 
 ### How to start each script
 
-There is no single answer that covers all six machines, because each platform has
+There is no single answer that covers all nine machines, because each platform has
 its own gate:
 
 | Machine | File | How to start it | Then |
@@ -174,8 +181,11 @@ its own gate:
 | GFX1 `.11` | `RUN-gfx1.bat` | **Double-click** | Click **Yes** on the UAC prompt |
 | GFX2 `.12` | `RUN-gfx2.bat` | **Double-click** | Click **Yes** on the UAC prompt |
 | GFX3 `.13` | `RUN-gfx3.bat` | **Double-click** | Click **Yes** on the UAC prompt |
-| MITTIA `.15` | `RUN-mittiA.command` | **Right-click → Open** | Confirm; macOS blocks it otherwise |
-| MITTIB `.16` | `RUN-mittiB.command` | **Right-click → Open** | Confirm; macOS blocks it otherwise |
+| GFX4 `.14` | `RUN-gfx4.bat` | **Double-click** | Click **Yes** on the UAC prompt |
+| GFX5 `.15` | `RUN-gfx5.bat` | **Double-click** | Click **Yes** on the UAC prompt |
+| GFX6 `.16` | `RUN-gfx6.bat` | **Double-click** | Click **Yes** on the UAC prompt |
+| MITTIA `.21` | `RUN-mittiA.command` | **Right-click → Open** | Confirm; macOS blocks it otherwise |
+| MITTIB `.22` | `RUN-mittiB.command` | **Right-click → Open** | Confirm; macOS blocks it otherwise |
 | INGEST `.10` | `RUN-ingest.sh` | Terminal, or `chmod +x` then double-click | Type your sudo password |
 
 Two details worth knowing before load-in:
@@ -213,29 +223,34 @@ password prompt.
 
 ### What each script asks
 
-All of them prompt for the share password. **Press Enter to accept `showrig`**
+All of them prompt for the share password. **Press Enter to accept `password`**
 rather than inventing one per machine — see [The share password](#the-share-password).
 
 INGEST on mkultra2 (Linux), from the show-deploy folder:
   sudo bash ./setup-ingest.sh
-It asks for the GFX password, then the Mac login (blank to skip if no Macs on
-this show). Pass the wired interface name as the first argument if auto-detection
+It asks for the GFX password, then whether Macs are on this show and the Mac
+share password (same `show` account, same default). Pass the wired interface name as the first argument if auto-detection
 is wrong: `sudo bash ./setup-ingest.sh enp3s0`. No reboot.
 Check: systemctl --user status showwatcher
 
-GFX: double-click RUN-gfx1.bat on the .11 laptop, RUN-gfx2.bat on .12,
-RUN-gfx3.bat on .13. UAC Yes. Asks for the share password. **Reboot only if it
+GFX: double-click RUN-gfx1.bat on the .11 laptop, RUN-gfx2.bat on .12, and so
+on through RUN-gfx6.bat on .16. UAC Yes. Asks for the share password. **Reboot only if it
 says it renamed the PC** — which it does on a freshly imaged machine, since the
 image will not carry the right name.
 
-Mac: right-click RUN-mittiA.command or RUN-mittiB.command, Open.
-Then System Settings, Sharing, File Sharing ON.
-ShowShare must be Desktop/Ingest. Tick SMB and tick the user.
+Mac: right-click RUN-mittiA.command or RUN-mittiB.command, Open. It asks for
+the Mac's own admin password (to run as root), then the share password (Enter).
+It creates the `show` account, turns File Sharing on over SMB, shares
+Desktop/Ingest as ShowShare, and ends with a **self-test** that logs in to the
+share the way Ingest will. Look for two `PASS` lines. If either says `FAIL`, the
+script prints the System Settings path to fix it by hand (File Sharing > ShowShare,
+SMB ticked, `show` ticked under Windows File Sharing) — that was the failure mode
+of the previous kit, where the folder appeared but Ingest was refused.
 **Reboot** — the Mac setup renames the machine the same way, and File Sharing
 does not reliably come up under the new name until it has. On the first push,
 click Allow on the Local Network prompt.
 
-GFX and Mitti machines both rename themselves, so expect five reboots across the
+GFX and Mitti machines both rename themselves, so expect eight reboots across the
 rig. Ingest never needs one. Restart them one at a time; the others are
 independent.
 
@@ -306,7 +321,7 @@ Three logs, all plain text, none of them load-bearing:
 | Log | Where | Rotates at | Keeps |
 |---|---|---|---|
 | `push_log.txt` | Ingest, in the drop folder | 5 MB | `.1` `.2` `.3` |
-| `arrival_log.txt` | GFX1-3, `C:\ShowScripts\` | 5 MB | `.1` |
+| `arrival_log.txt` | GFX1-6, `C:\ShowScripts\` | 5 MB | `.1` |
 | `showkit-arrival.log` | MITTIA/B, `~/Library/Logs/` | 5 MB | `.1` |
 
 `push_log.txt` is the one that matters during a show: it is what tells you a
@@ -318,7 +333,7 @@ than the push.
 
 | Extension | Goes to |
 |---|---|
-| `.pptx .ppt .key .pdf` | GFX1, GFX2, GFX3 |
+| `.pptx .ppt .key .pdf` | GFX1-GFX6 |
 | `.mp4 .mov .mxf .avi .mkv .wav .mp3 .aac .m4a` | MITTIA, MITTIB |
 | anything else | everything, logged as `UNKNOWN EXT` |
 
@@ -379,7 +394,7 @@ media file does not hold up the decks.
 
 **No state is expected to survive a show.** The warehouse reimages between
 events, so there is no "repair the previous show's config" path and no hidden
-carry-over to reason about. Each show is six clean machines and a fresh queue.
+carry-over to reason about. Each show is nine clean machines and a fresh queue.
 
 **Wi-Fi is never touched.** Every script refuses a wireless adapter outright
 rather than trusting the operator picked the right cable, and the restore path
@@ -404,7 +419,7 @@ Copy it somewhere that is not the rig, along with the far-end arrival logs if
 you want proof of receipt:
 
 ```
-arrival_log.txt        C:\ShowScripts\        on GFX1-3
+arrival_log.txt        C:\ShowScripts\        on GFX1-6
 showkit-arrival.log    ~/Library/Logs/        on MITTIA/B
 ```
 
@@ -432,20 +447,35 @@ Same job: removes the watcher service and its script, deletes stored SMB
 credentials and the push queue, returns the wired port to DHCP, cleans the
 hosts file. Wi-Fi is never touched, and no reboot is needed.
 
-Both keep the Ingest and Archive folders by default, so the show files survive
-— only `--purge` / `-Purge` removes those, and that is the point at which the
-show files are gone.
+**A Mac that is not going back for imaging** (your own, or a hire that has to
+be handed back clean): right-click `RUN-restore-mitti.command` → Open, or
+
+```
+sudo ./restore-mitti.sh           # keeps Desktop/Ingest
+sudo ./restore-mitti.sh --purge   # deletes it too
+```
+
+It reads the state `setup-mitti.sh` saved before it changed anything
+(`/Library/Preferences/showkit/restore.env`) and puts back the old computer
+name, the wired port's previous addressing (DHCP or whatever manual settings it
+had), removes ShowShare and the arrival watcher, deletes the `show` account if
+setup created it, and turns File Sharing off again only if it was off before.
+Wi-Fi is never touched. Reboot afterwards so the old name sticks.
+
+All of them keep the Ingest and Archive folders by default, so the show files
+survive — only `--purge` / `-Purge` removes those, and that is the point at
+which the show files are gone.
 
 ## Notes
 
-Built for a six-machine rig on a closed 192.168.50.0/24 network with no
+Built for a nine-machine rig on a closed 192.168.50.0/24 network with no
 internet dependency at show time. The addresses, machine names and share name
 are defined once per file — `show-watcher.py` has them near the top,
 `setup-gfx.ps1` and `setup-mitti.sh` have an IP map. Retargeting the kit to a
 different subnet means editing those.
 
 The kit assumes the machines arrive from the warehouse already imaged to a
-clean baseline, which is what makes "run all six setup scripts at load-in"
+clean baseline, which is what makes "run all nine setup scripts at load-in"
 sufficient. Nothing here provisions the base image, so if the image ever
 starts carrying stale show config, that is a change to make in the image
 rather than here.
@@ -465,6 +495,15 @@ at logon. Neither starts on its own if the machine is off — obviously.
   Linux-only. Windows Ingest shows no DONE/FAIL toasts yet.
 
 ## What was recently added
+
+- **Six GFX machines** (GFX1-6 on .11-.16). Macs moved to .21/.22.
+- **Mac share actually works.** `setup-mitti.sh` now creates a dedicated `show`
+  account with the SMB-NT hash enabled, turns File Sharing on from the command
+  line, grants the account write access to Desktop/Ingest, and self-tests the
+  share before declaring success. Previously it created the folder but Ingest
+  could never log in.
+- **`restore-mitti.sh`** — Mac equivalent of `restore-ingest.sh`.
+- Default share password is now `password`.
 
 - **Live dashboard** (`show-dashboard.py`) — http://localhost:8080, auto-started
   by `setup-ingest.sh`, no crew action needed.

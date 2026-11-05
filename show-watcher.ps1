@@ -55,7 +55,7 @@ $SkipRetry      = 60
 $LogRotateBytes = 5MB
 $LogKeep        = 3
 
-$GfxTargets   = @("GFX1", "GFX2", "GFX3")
+$GfxTargets   = @("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6")
 $MattiTargets = @("MITTIA", "MITTIB")
 $DeckExt   = @(".pptx", ".ppt", ".key", ".pdf")
 $MediaExt  = @(".mp4", ".mov", ".mxf", ".avi", ".mkv", ".wav", ".mp3", ".aac", ".m4a")

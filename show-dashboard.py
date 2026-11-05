@@ -26,7 +26,7 @@ DASHBOARD_PORT = 8080
 LOG_TAIL_LINES = 20
 
 # All machines the watcher knows about, in display order
-ALL_TARGETS = ["GFX1", "GFX2", "GFX3", "MITTIA", "MITTIB"]
+ALL_TARGETS = ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6", "MITTIA", "MITTIB"]
 
 # ---------------------------------------------------------------- data helpers
 
@@ -89,7 +89,7 @@ def _machines_status(entry: dict) -> dict[str, str]:
 
     # Which machines are this file's concern?
     if label == "DECK":
-        concerned = {"GFX1", "GFX2", "GFX3"}
+        concerned = {h for h in ALL_TARGETS if h.startswith("GFX")}
     elif label == "MEDIA":
         concerned = {"MITTIA", "MITTIB"}
     else:
@@ -189,14 +189,12 @@ td {
     word-break: break-all;
 }
 tr:last-child td { border-bottom: none; }
-.col-filename { width: 35%; }
-.col-status   { width: 14%; }
-.col-gfx1     { width: 7%;  text-align: center; }
-.col-gfx2     { width: 7%;  text-align: center; }
-.col-gfx3     { width: 7%;  text-align: center; }
-.col-mittia   { width: 8%;  text-align: center; }
-.col-mittib   { width: 8%;  text-align: center; }
-.col-time     { width: 14%; font-size: 0.9rem; color: #888; }
+.col-filename { width: 28%; }
+.col-status   { width: 12%; }
+.col-gfx1, .col-gfx2, .col-gfx3, .col-gfx4, .col-gfx5, .col-gfx6 { width: 6%; text-align: center; }
+.col-mittia   { width: 6%;  text-align: center; }
+.col-mittib   { width: 6%;  text-align: center; }
+.col-time     { width: 12%; font-size: 0.9rem; color: #888; }
 
 .row-done    { background: #0d2818; }
 .row-sending { background: #2a200a; }

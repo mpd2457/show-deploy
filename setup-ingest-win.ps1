@@ -1,7 +1,7 @@
 <#
     setup-ingest-win.ps1
     Fallback Ingest for when mkultra2 is not available: a Windows 11 Pro work
-    laptop. Takes over the 192.168.50.10 role and pushes to GFX1-3 and the
+    laptop. Takes over the 192.168.50.10 role and pushes to GFX1-6 and the
     Mitti Macs exactly like the Linux Ingest does.
 
     Differences from the Linux box, all deliberate:
@@ -43,8 +43,11 @@ $HostsMap = [ordered]@{
     "GFX1"   = "192.168.50.11"
     "GFX2"   = "192.168.50.12"
     "GFX3"   = "192.168.50.13"
-    "MITTIA" = "192.168.50.15"
-    "MITTIB" = "192.168.50.16"
+    "GFX4"   = "192.168.50.14"
+    "GFX5"   = "192.168.50.15"
+    "GFX6"   = "192.168.50.16"
+    "MITTIA" = "192.168.50.21"
+    "MITTIB" = "192.168.50.22"
 }
 
 $ScriptsDir  = Join-Path $env:LOCALAPPDATA "showkit"
@@ -69,7 +72,7 @@ function Read-Secret([string]$Prompt) {
 
 # Default offered so load-in is not an invented password per machine. Enter
 # accepts it; type to override.
-$DefaultSharePassword = "showrig"
+$DefaultSharePassword = "password"
 if ([string]::IsNullOrWhiteSpace($SharePassword)) {
     Write-Host "GFX share password for local account '$ShareUser' (Enter = $DefaultSharePassword):" -NoNewline
     $SharePassword = Read-Secret " "
