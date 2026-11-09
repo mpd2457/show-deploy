@@ -8,13 +8,17 @@
 # changes is recorded in /Library/Preferences/showkit/restore.env so
 # restore-mitti.sh can put the Mac back exactly.
 set -euo pipefail
+# Never die silently: say which line failed, and keep a log the crew can read back.
+trap 'echo; echo "FAILED at line $LINENO: $BASH_COMMAND"; echo "Log: /tmp/showkit-setup.log"' ERR
+exec > >(tee -a /tmp/showkit-setup.log) 2>&1
+echo "--- $(date) ---"
 if [ "$EUID" -ne 0 ]; then echo "Please run with sudo: sudo ./setup-mitti.sh MITTIA"; exit 1; fi
 if [ $# -lt 1 ]; then echo "Usage: sudo ./setup-mitti.sh <MITTIA|MITTIB> [network-service-name]"; exit 1; fi
 MACHINE_NAME="$1"
 NET_SERVICE="${2:-}"
 REAL_USER="${SUDO_USER:-}"
 if [ -z "$REAL_USER" ] || [ "$REAL_USER" = "root" ]; then REAL_USER=$(stat -f %Su /dev/console); fi
-HOME_DIR=$(dscl . -read "/Users/$REAL_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+HOME_DIR=$(dscl . -read "/Users/$REAL_USER" NFSHomeDirectory 2>/dev/null | awk '{print $2}' || true)
 HOME_DIR="${HOME_DIR:-/Users/$REAL_USER}"
 case "$MACHINE_NAME" in
     MITTIA) STATIC_IP="192.168.50.21" ;;
@@ -44,6 +48,7 @@ is_wireless_service() {
     esac
 }
 echo "=== $MACHINE_NAME setup starting (console user: $REAL_USER) ==="
+echo "Looking for the wired network port..."
 
 # ------------------------------------------------------------- pick the wired port
 if [ -z "$NET_SERVICE" ]; then
@@ -55,6 +60,7 @@ if [ -z "$NET_SERVICE" ]; then
     done < <(networksetup -listallnetworkservices | tail -n +2)
 fi
 if [ -z "$NET_SERVICE" ]; then echo "No connected wired network service. Plug in Ethernet."; exit 1; fi
+echo "Wired port: $NET_SERVICE"
 if is_wireless_service "$NET_SERVICE"; then echo "Refusing '$NET_SERVICE': it is wireless."; exit 1; fi
 
 # ------------------------------------------------- remember how the Mac was before
@@ -67,7 +73,8 @@ if [ ! -f "$RESTORE_ENV" ]; then
     PREV_IP=$(echo "$PREV_INFO" | awk -F': ' '/^IP address:/{print $2; exit}')
     PREV_MASK=$(echo "$PREV_INFO" | awk -F': ' '/^Subnet mask:/{print $2; exit}')
     PREV_ROUTER=$(echo "$PREV_INFO" | awk -F': ' '/^Router:/{print $2; exit}')
-    PREV_DNS=$(networksetup -getdnsservers "$NET_SERVICE" 2>/dev/null | grep -v "aren't" | tr '\n' ' ' | sed 's/ *$//')
+    # grep -v finds nothing when no DNS is set; with pipefail that must not abort the script
+    PREV_DNS=$(networksetup -getdnsservers "$NET_SERVICE" 2>/dev/null | grep -v "aren't" | tr '\n' ' ' | sed 's/ *$//' || true)
     if launchctl print system/com.apple.smbd >/dev/null 2>&1; then PREV_SMBD="on"; else PREV_SMBD="off"; fi
     if dscl . -read "/Users/$SHARE_USER" >/dev/null 2>&1; then PREV_SHARE_USER="existed"; else PREV_SHARE_USER="created"; fi
     cat > "$RESTORE_ENV" <<EOF
@@ -94,6 +101,7 @@ else
 fi
 
 # ------------------------------------------------------------------ names + IP
+echo "Setting name $MACHINE_NAME and IP $STATIC_IP..."
 scutil --set ComputerName "$MACHINE_NAME"
 scutil --set HostName "$MACHINE_NAME"
 scutil --set LocalHostName "$MACHINE_NAME"
