@@ -42,6 +42,17 @@ MITTI_TARGETS = ["MITTIA", "MITTIB"]
 DECK_EXTENSIONS = {".pptx", ".ppt", ".key", ".pdf"}
 MEDIA_EXTENSIONS = {".mp4", ".mov", ".mxf", ".avi", ".mkv", ".wav", ".mp3", ".aac", ".m4a"}
 IGNORE = {"push_log.txt", ".directory", "desktop.ini", "Thumbs.db", "queue.json"}
+DAY_FOLDERS = {"Day 1", "Day 2", "Day 3", "Day 4", "Day 5"}   # sorting bins, never pushed
+
+# Files in a subfolder of Ingest are routed by the TOP folder's name, and the
+# rest of the path is recreated on the far end:
+#   "GFX 1 Main Screen Content/Monday Awards/x.pptx" -> GFX1:  Monday Awards/x.pptx
+#   "GFX 3+4 Confidence Monitor/Tuesday/y.pptx"      -> GFX3 + GFX4
+#   "Videos for Playback/z.mp4"                      -> MITTIA + MITTIB
+# A folder whose name says nothing (no GFX n, no playback/video/media word) is
+# routed by extension like a top-level file, keeping its full path.
+_GFX_RE = re.compile(r"GFX\s*((?:\d+\s*(?:[+,&/-]|and)?\s*)+)", re.IGNORECASE)
+_MITTI_WORDS = ("MITTI", "PLAYBACK", "VIDEO", "MEDIA")
 
 def _env_num(name, default):
     try:
@@ -165,10 +176,59 @@ def save_queue(queue):
         _save_queue_locked(queue)
 
 
-def enqueue(path, queue):
-    name = path.name
-    size = path.stat().st_size
+def rel_of(path):
+    """Path of a drop file relative to Ingest, posix style - the queue key."""
+    return path.relative_to(DROP).as_posix()
+
+
+def ignored_name(name):
+    """Junk that must never be pushed: Office lock files, Finder metadata, our logs."""
+    return (name in IGNORE or name.startswith("push_log.txt")
+            or name.startswith("~$") or name.startswith("._") or name == ".DS_Store")
+
+
+def route_for_folder(folder):
+    """Hosts a top-level folder name selects, or None if the name says nothing."""
+    nums = []
+    for m in _GFX_RE.finditer(folder):
+        for part in re.split(r"[+,&/]|and", m.group(1), flags=re.IGNORECASE):
+            part = part.strip()
+            if not part:
+                continue
+            if "-" in part:
+                a, _, b = part.partition("-")
+                if a.strip().isdigit() and b.strip().isdigit():
+                    nums.extend(range(int(a), int(b) + 1))
+            elif part.isdigit():
+                nums.append(int(part))
+    hosts = [f"GFX{n}" for n in dict.fromkeys(nums) if f"GFX{n}" in GFX_TARGETS]
+    if hosts:
+        return hosts
+    up = folder.upper()
+    if any(w in up for w in _MITTI_WORDS):
+        return list(MITTI_TARGETS)
+    return None
+
+
+def plan(path):
+    """(label, route hosts, remote relative path) for a file under Ingest."""
+    rel = path.relative_to(DROP)
+    if len(rel.parts) == 1:
+        label = classify(path)
+        return label, targets_for(label), rel.as_posix()
+    top = rel.parts[0]
+    hosts = route_for_folder(top)
+    if hosts:
+        remote = Path(*rel.parts[1:]).as_posix()
+        return f"{top} -> {'+'.join(hosts)}", hosts, remote
     label = classify(path)
+    return label, targets_for(label), rel.as_posix()
+
+
+def enqueue(path, queue):
+    name = rel_of(path)
+    size = path.stat().st_size
+    label, route, remote = plan(path)
     with _queue_lock:
         existing = queue.get(name)
         if existing and existing.get("size") == size:
@@ -177,6 +237,8 @@ def enqueue(path, queue):
             "size": size,
             "targets": {},
             "label": label,
+            "route": route,
+            "remote": remote,
             "queued": datetime.now().isoformat(timespec="seconds"),
         }
         _save_queue_locked(queue)
@@ -199,6 +261,11 @@ def targets_for(label):
     if label == "MEDIA":
         return list(MITTI_TARGETS)
     return GFX_TARGETS + MITTI_TARGETS
+
+
+def entry_targets(entry):
+    """Hosts an existing queue entry is for (older entries have no 'route')."""
+    return list(entry.get("route") or targets_for(entry.get("label", "")))
 
 
 # ---------------------------------------------------------------------- SMB layer
@@ -226,8 +293,14 @@ def _smb(host, script, timeout):
     )
 
 
-def smb_put(host, path):
-    r = _smb(host, f'put "{path}" "{path.name}"', PUT_TIMEOUT)
+def smb_put(host, path, remote):
+    """Put `path` at `remote` (posix, relative to the share), creating folders."""
+    cmds = []
+    parts = remote.split("/")
+    for i in range(1, len(parts)):
+        cmds.append(f'mkdir "{"/".join(parts[:i])}"')   # collision on an existing dir is harmless
+    cmds.append(f'put "{path}" "{remote}"')
+    r = _smb(host, "; ".join(cmds), PUT_TIMEOUT)
     if r.returncode != 0:
         out = (r.stderr or r.stdout).strip()
         raise RuntimeError(out.splitlines()[-1] if out else f"smbclient exit {r.returncode}")
@@ -251,12 +324,12 @@ def smb_size(host, name):
     return None
 
 
-def push_one(host, path, expected_size):
+def push_one(host, path, expected_size, remote_name):
     """Push and verify. Returns (ok, detail)."""
     if not reachable(host):
         return None, "not on network this show"
-    smb_put(host, path)
-    remote = smb_size(host, path.name)
+    smb_put(host, path, remote_name)
+    remote = smb_size(host, remote_name)
     if remote is None:
         return True, "pushed, size not verifiable"
     if remote != expected_size:
@@ -268,18 +341,21 @@ def push_one(host, path, expected_size):
 
 
 def process(path, entry, queue):
-    name = path.name
+    name = rel_of(path)
     expected = entry["size"]
     label = entry["label"]
-    target_list = targets_for(label)
-    dest = lambda h: f"\\\\{h}\\ShowShare"  # noqa: E731
+    target_list = entry_targets(entry)
+    remote_name = entry.get("remote") or path.name
+    remote_dir = remote_name.rsplit("/", 1)[0] + "\\" if "/" in remote_name else ""
+    dest = lambda h: f"\\\\{h}\\ShowShare\\{remote_dir}".rstrip("\\")  # noqa: E731
 
-    # archive once, on first attempt
+    # archive once, on first attempt (same relative path under Archive)
     with _queue_lock:
         already_archived = entry.get("archived")
         entry["archived"] = True
     if not already_archived:
         try:
+            (ARCHIVE / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, ARCHIVE / name)
         except Exception as e:
             log(f"ARCHIVE FAILED : {name} : {e}")
@@ -301,7 +377,7 @@ def process(path, entry, queue):
 
     def run(host):
         try:
-            ok, detail = push_one(host, path, expected)
+            ok, detail = push_one(host, path, expected, remote_name)
         except Exception as e:
             ok, detail = False, str(e)
         with _queue_lock:
@@ -387,10 +463,26 @@ def process(path, entry, queue):
 
 
 def listing():
+    """Every pushable file under Ingest: top level plus routed subfolders.
+
+    Day 1..Day 5 are sorting bins and are never looked inside. Hidden files,
+    Office lock files (~$x.pptx) and Finder metadata (._x, .DS_Store) are skipped.
+    """
+    out = []
     try:
-        return [p for p in DROP.iterdir() if p.is_file() and p.name not in IGNORE]
+        for top in DROP.iterdir():
+            if top.is_file():
+                if not ignored_name(top.name):
+                    out.append(top)
+            elif top.is_dir() and top.name not in DAY_FOLDERS and not top.name.startswith("."):
+                for root, dirs, files in os.walk(top):
+                    dirs[:] = [d for d in dirs if not d.startswith(".")]
+                    for fn in files:
+                        if not ignored_name(fn):
+                            out.append(Path(root) / fn)
     except OSError:
         return []
+    return out
 
 
 def is_open(path):
@@ -454,29 +546,30 @@ def main():
             except OSError:
                 continue
             sig = (st.st_size, st.st_mtime_ns)
+            key = rel_of(f)
 
-            entry = queue.get(f.name)
+            entry = queue.get(key)
             if entry is not None and entry.get("size") != st.st_size:
                 # file changed under us, it is a new version: re-queue it
                 with _queue_lock:
-                    queue.pop(f.name, None)
+                    queue.pop(key, None)
                     _save_queue_locked(queue)
-                log(f"CHANGED {f.name} - size moved, treating as a new version")
+                log(f"CHANGED {key} - size moved, treating as a new version")
                 entry = None
 
             if entry is None:
-                prev = stable.get(f.name)
+                prev = stable.get(key)
                 if prev is None:
-                    stable[f.name] = (sig, 1)
+                    stable[key] = (sig, 1)
                     continue
                 if prev[0] != sig:
-                    stable[f.name] = (sig, 1)
+                    stable[key] = (sig, 1)
                     continue
                 count = prev[1] + 1
-                stable[f.name] = (sig, count)
+                stable[key] = (sig, count)
                 if count >= SETTLE_POLLS and not is_open(f):
                     if enqueue(f, queue):
-                        stable.pop(f.name, None)
+                        stable.pop(key, None)
                 continue
 
             if entry.get("done"):
@@ -486,15 +579,15 @@ def main():
                 gu = entry.get("gave_up_mtime")
                 if gu is not None and st.st_mtime_ns != gu:
                     with _queue_lock:
-                        queue.pop(f.name, None)
+                        queue.pop(key, None)
                         _save_queue_locked(queue)
-                    log(f"RE-ARMED {f.name} - file was re-copied after giving up")
+                    log(f"RE-ARMED {key} - file was re-copied after giving up")
                 continue
             needs_retry = any(
                 not entry.get("delivered", {}).get(h)
                 and h not in entry.get("given_up", {})
                 and time.time() >= entry.get("next_try", {}).get(h, 0)
-                for h in targets_for(entry["label"])
+                for h in entry_targets(entry)
             )
             if needs_retry and not is_open(f):
                 due.append(f)
@@ -502,7 +595,7 @@ def main():
         stable = {k: v for k, v in stable.items() if (DROP / k).exists()}
 
         for f in due:
-            entry = queue.get(f.name)
+            entry = queue.get(rel_of(f))
             if entry:
                 process(f, entry, queue)
         if due:

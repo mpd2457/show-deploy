@@ -44,8 +44,12 @@ ctl = json.load(open(os.path.join(home, "control.json")))
 host = re.split(r"[/\\\\]", sys.argv[1].strip("/\\\\"))[0]
 log = os.path.join(home, "smbcalls.log")
 
-# last -c argument is the command string
+# last -c argument is the command string; the real watcher sends
+# 'mkdir "a"; mkdir "a/b"; put "local" "a/b/x"' for a routed file - the put is
+# what matters, the mkdirs are logged and otherwise ignored
 cmd = sys.argv[sys.argv.index("-c") + 1]
+if "; put " in cmd:
+    cmd = "put " + cmd.split("; put ", 1)[1]
 with open(log, "a") as f:
     f.write("%.3f %s %s\\n" % (time.time(), host, cmd))
 
@@ -390,6 +394,45 @@ def s10_day_folders_are_inert(home):
 
 
 @scenario
+def s14_subfolders_route_by_name(home):
+    # A top folder named for a machine sends its contents to that machine only,
+    # recreating the sub-path on the far end. "GFX 3+4" fans out to both.
+    # "Videos for Playback" is the Macs. Lock files and Finder junk are skipped.
+    set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6", "MITTIA", "MITTIB"], "hosts": {}})
+    drop = home / "Desktop" / "Ingest"
+    (drop / "GFX 1 Main Screen Content" / "Monday Awards").mkdir(parents=True)
+    (drop / "GFX 1 Main Screen Content" / "Monday Awards" / "awards.pptx").write_bytes(b"a" * 300)
+    (drop / "GFX 1 Main Screen Content" / "Monday Awards" / "~$awards.pptx").write_bytes(b"l" * 165)
+    (drop / "GFX 1 Main Screen Content" / "Monday Awards" / "._awards.pptx").write_bytes(b"f" * 4096)
+    (drop / "GFX 1 Main Screen Content" / ".DS_Store").write_bytes(b"d" * 10)
+    (drop / "GFX 3+4  Confidence Monitor" / "Tuesday").mkdir(parents=True)
+    (drop / "GFX 3+4  Confidence Monitor" / "Tuesday" / "conf.pptx").write_bytes(b"c" * 300)
+    (drop / "Videos for Playback").mkdir()
+    (drop / "Videos for Playback" / "walkin.mp4").write_bytes(b"v" * 300)
+    (drop / "Misc").mkdir()
+    (drop / "Misc" / "loose.pptx").write_bytes(b"x" * 300)
+    run_watcher(home, T(14))
+    txt = logtext(home)
+    g1 = list(store(home, "GFX1"))
+    check("GFX1 got awards under its sub-path", "Monday Awards/awards.pptx" in g1, str(g1))
+    check("GFX1 did not get the GFX3+4 deck", not any("conf.pptx" in n for n in g1), str(g1))
+    check("GFX2 got nothing from GFX1 folder", not any("awards" in n for n in store(home, "GFX2")),
+          str(list(store(home, "GFX2"))))
+    for h in ("GFX3", "GFX4"):
+        check(f"{h} got the 3+4 deck", "Tuesday/conf.pptx" in store(home, h), str(list(store(home, h))))
+    for h in ("MITTIA", "MITTIB"):
+        check(f"{h} got playback video", "walkin.mp4" in store(home, h), str(list(store(home, h))))
+    check("GFX1 did not get playback video", "walkin.mp4" not in g1, str(g1))
+    check("unnamed folder falls back to extension rule (all GFX, path kept)",
+          all("Misc/loose.pptx" in store(home, h) for h in ("GFX1", "GFX6")), str(g1))
+    check("lock file skipped", "~$awards" not in txt, txt)
+    check("Finder ._ file skipped", "._awards" not in txt, txt)
+    check(".DS_Store skipped", "DS_Store" not in txt, txt)
+    check("archived under same sub-path",
+          (home / "Desktop" / "Archive" / "GFX 1 Main Screen Content" / "Monday Awards" / "awards.pptx").exists())
+
+
+@scenario
 def s11_log_rotates(home):
     set_control(home, {"up": [], "hosts": {}})
     drop = home / "Desktop" / "Ingest"
@@ -466,7 +509,7 @@ def main():
                  s7_pending_survives_restart, s8_unknown_extension_goes_everywhere,
                  s9_missing_ingest_dir_is_recreated, s10_day_folders_are_inert,
                  s11_log_rotates, s12_queue_survives_corruption,
-                  s13_given_up_file_rearms_when_recopied]
+                 s13_given_up_file_rearms_when_recopied, s14_subfolders_route_by_name]
     only = sys.argv[1:]
     for s in scenarios:
         if only and not any(o in s.__name__ for o in only):

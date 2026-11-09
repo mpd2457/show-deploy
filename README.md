@@ -337,8 +337,23 @@ than the push.
 | `.mp4 .mov .mxf .avi .mkv .wav .mp3 .aac .m4a` | MITTIA, MITTIB |
 | anything else | everything, logged as `UNKNOWN EXT` |
 
-Only the top level of the drop folder is watched. Files you drag into a Day
-folder are left alone — they were delivered when you dropped them.
+Files dropped loose in Ingest follow that table. Files inside a **named
+subfolder** are routed by the folder's name instead, and the rest of the path is
+recreated on the far end:
+
+| Top folder in Ingest | Goes to | Lands as |
+|---|---|---|
+| `GFX 1 Main Screen Content/Monday Awards/x.pptx` | GFX1 only | `Ingest\Monday Awards\x.pptx` |
+| `GFX 3+4 Confidence Monitor/Tuesday/y.pptx` | GFX3 and GFX4 | `Ingest\Tuesday\y.pptx` |
+| `Videos for Playback/z.mp4` (or any folder with Playback / Video / Media / Mitti in the name) | MITTIA, MITTIB | `Ingest/z.mp4` |
+| a folder whose name says nothing (`Misc/`) | by extension, as above | `Ingest\Misc\...` |
+
+Any `GFX` spelling works: `GFX 2`, `GFX1-3`, `GFX 5, 6`, `GFX1 and GFX2`. So you can
+build the whole show tree on the Ingest machine and copy it in as one drop.
+
+`Day 1` through `Day 5` are the exception: they are sorting bins, never looked
+inside. Office lock files (`~$x.pptx`), Finder metadata (`._x`, `.DS_Store`) and
+hidden files are ignored everywhere.
 
 ## If something fails
 
@@ -495,6 +510,12 @@ at logon. Neither starts on its own if the machine is off — obviously.
   Linux-only. Windows Ingest shows no DONE/FAIL toasts yet.
 
 ## What was recently added
+
+* Subfolder routing: a folder named for a machine (`GFX 1 …`, `GFX 3+4 …`,
+  `Videos for Playback`) sends its contents to those machines only, keeping the
+  sub-path. Lock files and Finder metadata are skipped. `RUN-fix-mitti-share.command`
+  repairs a Mac whose ShowShare was invisible to `show` (traverse rights on
+  `~` and `~/Desktop` — smbd hides a share whose path the user cannot reach).
 
 - **Six GFX machines** (GFX1-6 on .11-.16). Macs moved to .21/.22.
 - **Mac share actually works.** `setup-mitti.sh` now creates a dedicated `show`

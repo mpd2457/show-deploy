@@ -87,8 +87,11 @@ def _machines_status(entry: dict) -> dict[str, str]:
     delivered = entry.get("delivered", {})
     given_up  = entry.get("given_up", {})
 
-    # Which machines are this file's concern?
-    if label == "DECK":
+    # Which machines are this file's concern? Folder-routed files carry an
+    # explicit route; older/top-level entries fall back to the extension rule.
+    if entry.get("route"):
+        concerned = set(entry["route"])
+    elif label == "DECK":
         concerned = {h for h in ALL_TARGETS if h.startswith("GFX")}
     elif label == "MEDIA":
         concerned = {"MITTIA", "MITTIB"}
