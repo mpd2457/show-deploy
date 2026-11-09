@@ -169,6 +169,14 @@ if dscl . -read /Groups/com.apple.access_smb >/dev/null 2>&1; then
 fi
 # write access to the drop folder for the share account (console user keeps ownership)
 chmod -R +a "$SHARE_USER allow list,add_file,search,add_subdirectory,delete_child,readattr,writeattr,readextattr,writeextattr,readsecurity,delete,file_inherit,directory_inherit" "$INGEST_DIR"
+# smbd only offers a share to a user who can reach its path. ~/Desktop is private
+# (700) on a Mac, so without this 'show' logs in fine but ShowShare is invisible.
+# Give the share account traverse-only rights on every folder above Ingest.
+d="$(dirname "$INGEST_DIR")"
+while [ "$d" != "/" ] && [ "$d" != "/Users" ]; do
+    chmod +a "$SHARE_USER allow search,readattr" "$d" 2>/dev/null || true
+    d="$(dirname "$d")"
+done
 
 # ------------------------------------------------------------------ the share
 echo "Sharing $INGEST_DIR as ShowShare..."

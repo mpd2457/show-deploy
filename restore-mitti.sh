@@ -67,6 +67,12 @@ else
 fi
 if [ -d "$INGEST_DIR" ]; then
     chmod -R -a# 0 "$INGEST_DIR" 2>/dev/null || true
+    # drop the traverse ACLs setup added to the parent folders (Desktop, home)
+    d="$(dirname "$INGEST_DIR")"
+    while [ "$d" != "/" ] && [ "$d" != "/Users" ]; do
+        chmod -a "$SHARE_USER allow search,readattr" "$d" 2>/dev/null || true
+        d="$(dirname "$d")"
+    done
 fi
 
 # 4. names
