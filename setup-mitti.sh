@@ -141,9 +141,10 @@ if dscl . -read "/Users/$SHARE_USER" >/dev/null 2>&1; then
 else
     # a service account: no real home, no login shell, hidden from the login
     # window. SMB does not need any of those.
+    echo "Creating local account '$SHARE_USER'..."
     sysadminctl -addUser "$SHARE_USER" -fullName "Show Share" -password "$SHARE_PASS" \
-        -home /var/empty -shell /usr/bin/false >/dev/null 2>&1 \
-        || dscl . -create "/Users/$SHARE_USER"
+        -home /var/empty -shell /usr/bin/false </dev/null >/dev/null 2>&1 \
+        || dscl . -create "/Users/$SHARE_USER" </dev/null
     dscl . -create "/Users/$SHARE_USER" IsHidden 1 2>/dev/null || true
     echo "Created local account '$SHARE_USER'."
 fi
@@ -151,8 +152,9 @@ fi
 # the NT hash, then (re)set the password so the hash is generated. Setting the
 # password alone is not enough - that is why the previous kit got the folder
 # created but every login from Ingest refused.
-pwpolicy -u "$SHARE_USER" -sethashtypes SMB-NT on >/dev/null 2>&1 || true
-dscl . -passwd "/Users/$SHARE_USER" "$SHARE_PASS"
+echo "Enabling SMB login for '$SHARE_USER'..."
+pwpolicy -u "$SHARE_USER" -sethashtypes SMB-NT on </dev/null >/dev/null 2>&1 || true
+dscl . -passwd "/Users/$SHARE_USER" "$SHARE_PASS" </dev/null
 # if an SMB access list exists, make sure our user is on it
 if dscl . -read /Groups/com.apple.access_smb >/dev/null 2>&1; then
     dseditgroup -o edit -a "$SHARE_USER" -t user com.apple.access_smb 2>/dev/null || true
@@ -161,6 +163,7 @@ fi
 chmod -R +a "$SHARE_USER allow list,add_file,search,add_subdirectory,delete_child,readattr,writeattr,readextattr,writeextattr,readsecurity,delete,file_inherit,directory_inherit" "$INGEST_DIR"
 
 # ------------------------------------------------------------------ the share
+echo "Sharing $INGEST_DIR as ShowShare..."
 sharing -r ShowShare 2>/dev/null || true
 sharing -a "$INGEST_DIR" -S ShowShare -s 001 -g 000
 # File Sharing ON, SMB only (this is what the System Settings toggle writes)
@@ -176,6 +179,7 @@ if [ -x "$FW" ] && "$FW" --getglobalstate 2>/dev/null | grep -qi enabled; then
 fi
 
 # ------------------------------------------------------------------ the watcher
+echo "Installing the arrival logger..."
 install -m 0755 "$SCRIPT_DIR/show-watcher-mac.sh" "$WATCHER_SCRIPT"
 /usr/bin/sed -i '' \
     -e "s|^DIR=.*|DIR=\"\${SHOWKIT_DIR:-$INGEST_DIR}\"|" \
