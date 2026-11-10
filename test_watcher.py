@@ -354,14 +354,16 @@ def s7_pending_survives_restart(home):
 
 
 @scenario
-def s8_unknown_extension_goes_everywhere(home):
+def s8_unknown_extension_goes_to_gfx_only(home):
     set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6", "MITTIA", "MITTIB"], "hosts": {}})
     (home / "Desktop" / "Ingest" / "notes.txt").write_bytes(b"n" * 100)
     run_watcher(home, T(12))
     txt = logtext(home)
-    check("logged as UNKNOWN EXT", "UNKNOWN EXT .txt -> ALL" in txt, txt)
-    for h in ("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6", "MITTIA", "MITTIB"):
+    check("logged as UNKNOWN EXT", "UNKNOWN EXT .txt -> GFX" in txt, txt)
+    for h in ("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"):
         check(f"unknown ext reached {h}", f"-> \\\\{h}" in txt, txt)
+    for h in ("MITTIA", "MITTIB"):
+        check(f"unknown ext kept off {h} (Macs only take media)", f"-> \\\\{h}" not in txt, txt)
 
 
 @scenario
@@ -409,6 +411,7 @@ def s14_subfolders_route_by_name(home):
     (drop / "GFX 3+4  Confidence Monitor" / "Tuesday" / "conf.pptx").write_bytes(b"c" * 300)
     (drop / "Videos for Playback").mkdir()
     (drop / "Videos for Playback" / "walkin.mp4").write_bytes(b"v" * 300)
+    (drop / "Videos for Playback" / "deck.pptx").write_bytes(b"p" * 300)
     (drop / "Misc").mkdir()
     (drop / "Misc" / "loose.pptx").write_bytes(b"x" * 300)
     run_watcher(home, T(14))
@@ -423,6 +426,14 @@ def s14_subfolders_route_by_name(home):
     for h in ("MITTIA", "MITTIB"):
         check(f"{h} got playback video", "walkin.mp4" in store(home, h), str(list(store(home, h))))
     check("GFX1 did not get playback video", "walkin.mp4" not in g1, str(g1))
+    for h in ("MITTIA", "MITTIB"):
+        check(f"{h} did NOT get the deck from the Playback folder", "deck.pptx" not in store(home, h),
+              str(list(store(home, h))))
+    check("deck in Playback folder is REJECTED in the log", "REJECT Videos for Playback/deck.pptx" in txt, txt)
+    check("rejected deck went to no GFX either", not any("deck.pptx" in n for n in g1), str(g1))
+    qj = json.loads((home / ".config" / "showkit" / "queue.json").read_text())
+    rej = qj.get("Videos for Playback/deck.pptx", {})
+    check("rejected entry is settled (done + rejected)", rej.get("done") and rej.get("rejected"), str(rej))
     check("unnamed folder falls back to extension rule (all GFX, path kept)",
           all("Misc/loose.pptx" in store(home, h) for h in ("GFX1", "GFX6")), str(g1))
     check("lock file skipped", "~$awards" not in txt, txt)
@@ -506,7 +517,7 @@ def main():
     scenarios = [s1_deck_reaches_all_gfx, s2_refused_put_is_retried_then_succeeds,
                  s3_absent_machine_skipped_then_given_up, s4_size_mismatch_is_caught,
                  s5_in_progress_copy_not_pushed, s6_pushes_run_in_parallel,
-                 s7_pending_survives_restart, s8_unknown_extension_goes_everywhere,
+                 s7_pending_survives_restart, s8_unknown_extension_goes_to_gfx_only,
                  s9_missing_ingest_dir_is_recreated, s10_day_folders_are_inert,
                  s11_log_rotates, s12_queue_survives_corruption,
                  s13_given_up_file_rearms_when_recopied, s14_subfolders_route_by_name]

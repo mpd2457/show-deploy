@@ -51,6 +51,9 @@ DAY_FOLDERS = {"Day 1", "Day 2", "Day 3", "Day 4", "Day 5"}   # sorting bins, ne
 #   "Videos for Playback/z.mp4"                      -> MITTIA + MITTIB
 # A folder whose name says nothing (no GFX n, no playback/video/media word) is
 # routed by extension like a top-level file, keeping its full path.
+# The Macs ONLY ever receive audio/video (MEDIA_EXTENSIONS): a deck dropped in a
+# Playback folder is REJECTED (logged, nothing sent), and unknown extensions go
+# to the GFX machines only.
 _GFX_RE = re.compile(r"GFX\s*((?:\d+\s*(?:[+,&/-]|and)?\s*)+)", re.IGNORECASE)
 _MITTI_WORDS = ("MITTI", "PLAYBACK", "VIDEO", "MEDIA")
 
@@ -220,9 +223,20 @@ def plan(path):
     hosts = route_for_folder(top)
     if hosts:
         remote = Path(*rel.parts[1:]).as_posix()
+        hosts = macs_media_only(path, hosts)
+        if not hosts:
+            return (f"{top} -> REJECTED: {path.suffix.lower() or 'no ext'} is not audio/video, "
+                    f"Macs only take media"), [], remote
         return f"{top} -> {'+'.join(hosts)}", hosts, remote
     label = classify(path)
     return label, targets_for(label), rel.as_posix()
+
+
+def macs_media_only(path, hosts):
+    """Strip the Mitti Macs from a route unless the file is audio/video."""
+    if path.suffix.lower() in MEDIA_EXTENSIONS:
+        return list(hosts)
+    return [h for h in hosts if h not in MITTI_TARGETS]
 
 
 def enqueue(path, queue):
@@ -241,7 +255,16 @@ def enqueue(path, queue):
             "remote": remote,
             "queued": datetime.now().isoformat(timespec="seconds"),
         }
+        if not route:
+            # nowhere to send it (deck in a Playback folder): settle it at once
+            queue[name]["done"] = True
+            queue[name]["rejected"] = label
         _save_queue_locked(queue)
+    if not route:
+        log(f"REJECT {name} [{label}] : nothing sent")
+        notify("normal", 8000, "dialog-warning", "Show Deploy",
+               f"REJECTED {name} — Macs only take audio/video; nothing sent")
+        return True
     log(f"QUEUED {name} [{label}]")
     return True
 
@@ -252,7 +275,7 @@ def classify(path):
         return "DECK"
     if ext in MEDIA_EXTENSIONS:
         return "MEDIA"
-    return f"UNKNOWN EXT {ext} -> ALL"
+    return f"UNKNOWN EXT {ext} -> GFX"
 
 
 def targets_for(label):
@@ -260,7 +283,7 @@ def targets_for(label):
         return list(GFX_TARGETS)
     if label == "MEDIA":
         return list(MITTI_TARGETS)
-    return GFX_TARGETS + MITTI_TARGETS
+    return list(GFX_TARGETS)   # unknown types: GFX only, the Macs only take media
 
 
 def entry_targets(entry):

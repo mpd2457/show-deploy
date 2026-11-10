@@ -331,16 +331,18 @@ def s7_pending_survives_restart(home):
 
 
 @scenario
-def s8_unknown_extension_goes_everywhere(home):
+def s8_unknown_extension_goes_to_gfx_only(home):
     set_control(home, {"up": ["GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6", "MITTIA", "MITTIB"], "hosts": {}})
     d = home / "profile" / "Desktop" / "Ingest"
     d.mkdir(parents=True, exist_ok=True)
     (d / "notes.txt").write_bytes(b"n" * 100)
     out = run_watcher(home, 60)
     txt = logtext(home)
-    check("logged as UNKNOWN EXT", "UNKNOWN EXT .txt -> ALL" in txt, txt or out[-800:])
-    for h in ("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6", "MITTIA", "MITTIB"):
+    check("logged as UNKNOWN EXT", "UNKNOWN EXT .txt -> GFX" in txt, txt or out[-800:])
+    for h in ("GFX1", "GFX2", "GFX3", "GFX4", "GFX5", "GFX6"):
         check(f"unknown ext reached {h}", f"-> \\\\{h}" in txt, txt)
+    for h in ("MITTIA", "MITTIB"):
+        check(f"unknown ext kept off {h}", f"-> \\\\{h}" not in txt, txt)
 
 
 @scenario

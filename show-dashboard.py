@@ -52,15 +52,18 @@ def _read_log_tail(n: int = LOG_TAIL_LINES) -> list[str]:
 
 def _classify_entry(entry: dict) -> str:
     """
-    Return one of: "done", "failed", "sending", "queued"
+    Return one of: "done", "failed", "sending", "queued", "rejected"
 
     Logic mirrors the watcher:
+      rejected → entry["rejected"] set (deck in a Playback folder: Macs only take media)
       done     → entry["done"] is truthy
       failed   → given_up has at least one host that ran out of attempts
                  (as opposed to "machine never came up")
       sending  → has targets dict with at least one attempt on any host
       queued   → just entered the queue, no attempts yet
     """
+    if entry.get("rejected"):
+        return "rejected"
     if entry.get("done"):
         return "done"
 
@@ -166,6 +169,7 @@ h1 {
 .pill-sending { background: #4a3a0a; color: #ffd966; border: 1.5px solid #aa8a20; }
 .pill-queued  { background: #2a2a4a; color: #aabbff; border: 1.5px solid #5566bb; }
 .pill-failed  { background: #4a0a0a; color: #ff7777; border: 1.5px solid #aa2222; }
+.pill-rejected { background: #4a2a0a; color: #ffb366; border: 1.5px solid #aa6a22; }
 .pill-total   { background: #222;    color: #aaa;    border: 1.5px solid #444; }
 
 table {
@@ -203,6 +207,7 @@ tr:last-child td { border-bottom: none; }
 .row-sending { background: #2a200a; }
 .row-queued  { background: #131325; }
 .row-failed  { background: #2a0d0d; }
+.row-rejected { background: #2a1a0d; }
 .row-done:hover    { background: #133320; }
 .row-sending:hover { background: #362a0e; }
 .row-queued:hover  { background: #1a1a38; }
@@ -217,6 +222,7 @@ tr:last-child td { border-bottom: none; }
 .st-sending { color: #ffd966; }
 .st-queued  { color: #aabbff; }
 .st-failed  { color: #ff7777; }
+.st-rejected { color: #ffb366; }
 
 .machine-cell { font-size: 1.2rem; }
 
@@ -269,18 +275,21 @@ _STATUS_LABEL = {
     "sending": "🔄 SENDING",
     "queued":  "⏳ QUEUED",
     "failed":  "❌ FAILED",
+    "rejected": "🚫 REJECTED",
 }
 _STATUS_CLASS = {
     "done":    "st-done",
     "sending": "st-sending",
     "queued":  "st-queued",
     "failed":  "st-failed",
+    "rejected": "st-rejected",
 }
 _ROW_CLASS = {
     "done":    "row-done",
     "sending": "row-sending",
     "queued":  "row-queued",
     "failed":  "row-failed",
+    "rejected": "row-rejected",
 }
 
 
@@ -292,7 +301,7 @@ def _log_line_class(line: str) -> str:
         return "log-done"
     if "FAIL" in ll or "SIZE MISMATCH" in ll:
         return "log-fail"
-    if "GIVE UP" in ll or "GIVING UP" in ll:
+    if "GIVE UP" in ll or "GIVING UP" in ll or "REJECT" in ll:
         return "log-give"
     if "SKIP" in ll:
         return "log-skip"
@@ -314,7 +323,7 @@ def build_html() -> str:
     now_str   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # Count by status
-    counts = {"done": 0, "sending": 0, "queued": 0, "failed": 0}
+    counts = {"done": 0, "sending": 0, "queued": 0, "failed": 0, "rejected": 0}
     rows_data = []
     for name, entry in sorted(queue.items()):
         if not isinstance(entry, dict):
@@ -334,6 +343,7 @@ def build_html() -> str:
         ("sending", counts["sending"], "pill-sending", "Sending"),
         ("queued",  counts["queued"],  "pill-queued",  "Queued"),
         ("failed",  counts["failed"],  "pill-failed",  "Failed"),
+        ("rejected", counts["rejected"], "pill-rejected", "Rejected"),
     ]
     for _, cnt, cls, label in pill_data:
         summary_parts.append(

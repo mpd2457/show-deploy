@@ -335,7 +335,7 @@ than the push.
 |---|---|
 | `.pptx .ppt .key .pdf` | GFX1-GFX6 |
 | `.mp4 .mov .mxf .avi .mkv .wav .mp3 .aac .m4a` | MITTIA, MITTIB |
-| anything else | everything, logged as `UNKNOWN EXT` |
+| anything else | GFX1-GFX6 only, logged as `UNKNOWN EXT` (the Macs only ever take audio/video) |
 
 Files dropped loose in Ingest follow that table. Files inside a **named
 subfolder** are routed by the folder's name instead, and the rest of the path is
@@ -346,6 +346,7 @@ recreated on the far end:
 | `GFX 1 Main Screen Content/Monday Awards/x.pptx` | GFX1 only | `Ingest\Monday Awards\x.pptx` |
 | `GFX 3+4 Confidence Monitor/Tuesday/y.pptx` | GFX3 and GFX4 | `Ingest\Tuesday\y.pptx` |
 | `Videos for Playback/z.mp4` (or any folder with Playback / Video / Media / Mitti in the name) | MITTIA, MITTIB | `Ingest/z.mp4` |
+| `Videos for Playback/deck.pptx` (anything that is not audio/video in a Mac folder) | nowhere — logged `REJECT`, shown 🚫 REJECTED on the dashboard | — |
 | a folder whose name says nothing (`Misc/`) | by extension, as above | `Ingest\Misc\...` |
 
 Any `GFX` spelling works: `GFX 2`, `GFX1-3`, `GFX 5, 6`, `GFX1 and GFX2`. So you can

@@ -189,14 +189,14 @@ function Get-Label([string]$Path) {
     $ext = [IO.Path]::GetExtension($Path).ToLowerInvariant()
     if ($DeckExt -contains $ext) { return "DECK" }
     if ($MediaExt -contains $ext) { return "MEDIA" }
-    return "UNKNOWN EXT $ext -> ALL"
+    return "UNKNOWN EXT $ext -> GFX"
 }
 
 function Get-Targets([string]$Label) {
     switch ($Label) {
         "DECK"  { return $GfxTargets }
         "MEDIA" { return $MattiTargets }
-        default { return @($GfxTargets + $MattiTargets) }
+        default { return $GfxTargets }   # Macs only take media
     }
 }
 
